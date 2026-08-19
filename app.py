@@ -58,6 +58,7 @@ async def get_viewer():
         <h1>Semantic Kernel X3D Agent</h1>
         <p>Type a natural language instruction to dynamically modify the 3D scene.</p>
         
+        <!-- X_ite Canvas referencing the scene file directly -->
         <x3d-canvas src="scene.x3d" id="x3dCanvas"></x3d-canvas>
 
         <div class="control-panel">
@@ -88,10 +89,16 @@ async def get_viewer():
                     statusDiv.textContent = data.message;
                     inputField.value = ""; 
                     
-                    const canvas = document.getElementById('x3dCanvas');
-                    if (canvas && canvas.browser) {
-                        await canvas.browser.loadURL(new X3D.MFString('scene.x3d?t=' + Date.now()));
+                    // Force complete DOM re-render of the x3d-canvas to display new shapes
+                    const container = document.querySelector('.container');
+                    const oldCanvas = document.getElementById('x3dCanvas');
+                    if (oldCanvas) {
+                        oldCanvas.remove();
                     }
+                    const newCanvas = document.createElement('x3d-canvas');
+                    newCanvas.setAttribute('src', 'scene.x3d?t=' + Date.now());
+                    newCanvas.id = 'x3dCanvas';
+                    container.insertBefore(newCanvas, document.querySelector('.control-panel'));
                 } else {
                     statusDiv.textContent = "Error: " + (data.detail || "Unknown error");
                 }
@@ -152,7 +159,6 @@ async def run_agent(req: PromptRequest):
         with open(SCENE_FILE, "r") as f:
             content = f.read()
         
-        # Self-healing check: if Scene closing tag is missing, re-initialize file
         if "</Scene>" not in content and "</scene>" not in content:
             with open(SCENE_FILE, "w") as f:
                 f.write(DEFAULT_X3D)
