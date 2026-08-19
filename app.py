@@ -54,12 +54,8 @@ async def get_viewer():
         <h1>Semantic Kernel X3D Agent</h1>
         <p>Type a natural language instruction to dynamically modify the 3D scene.</p>
         
-        <!-- X_ite Canvas with inline scene child -->
-        <x3d-canvas id="x3dCanvas">
-            <scene>
-                <inline id="sceneInline" url="scene.x3d"></inline>
-            </scene>
-        </x3d-canvas>
+        <!-- X_ite Canvas referencing the scene file directly -->
+        <x3d-canvas src="scene.x3d" id="x3dCanvas"></x3d-canvas>
 
         <div class="control-panel">
             <input type="text" id="promptInput" placeholder="e.g., Add a red sphere at 0 1 -3" autocomplete="off" />
@@ -87,12 +83,12 @@ async def get_viewer():
                 const data = await response.json();
                 if (response.ok) {
                     statusDiv.textContent = data.message;
-                    inputField.value = ""; // Clear input on success
+                    inputField.value = ""; // Clear input safely
                     
-                    // Re-trigger the inline element fetch with timestamp cache-buster
-                    const inlineEl = document.getElementById('sceneInline');
-                    if (inlineEl) {
-                        inlineEl.setAttribute('url', 'scene.x3d?t=' + Date.now());
+                    // Use X_ite canvas browser engine to load the updated URL with cache buster
+                    const canvas = document.getElementById('x3dCanvas');
+                    if (canvas && canvas.browser) {
+                        await canvas.browser.loadURL(new X3D.MFString('scene.x3d?t=' + Date.now()));
                     }
                 } else {
                     statusDiv.textContent = "Error: " + (data.detail || "Unknown error");
@@ -102,7 +98,7 @@ async def get_viewer():
             }
         }
 
-        // Allow pressing Enter key to submit prompt
+        // Allow pressing Enter to submit
         document.getElementById('promptInput').addEventListener('keydown', function(event) {
             if (event.key === 'Enter') {
                 sendPrompt();
