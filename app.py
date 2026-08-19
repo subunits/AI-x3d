@@ -169,4 +169,4 @@ async def run_agent(req: PromptRequest):
 
         return {"status": "success", "message": msg}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))a
+        raise HTTPException(status_code=500, detail=str(e))
