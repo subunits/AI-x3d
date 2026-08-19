@@ -36,13 +36,12 @@ async def get_viewer():
 <head>
     <meta charset="UTF-8">
     <title>Semantic Kernel X3D Agent</title>
-    <!-- X_ite Viewer Stylesheet & Script -->
-    <link rel="stylesheet" href="https://create3000.github.io/code/x_ite/latest/x_ite.css">
+    <!-- X_ite Viewer Script -->
     <script src="https://create3000.github.io/code/x_ite/latest/x_ite.min.js" defer></script>
     <style>
         body { font-family: sans-serif; margin: 0; padding: 20px; background: #111; color: #fff; }
         .container { max-width: 900px; margin: auto; }
-        x3d { width: 100%; height: 500px; border: 1px solid #444; border-radius: 8px; }
+        x3d-canvas { width: 100%; height: 500px; border: 1px solid #444; border-radius: 8px; display: block; }
         .control-panel { margin-top: 15px; display: flex; gap: 10px; }
         input[type="text"] { flex: 1; padding: 10px; border-radius: 4px; border: 1px solid #555; background: #222; color: #fff; }
         button { padding: 10px 20px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer; }
@@ -55,12 +54,12 @@ async def get_viewer():
         <h1>Semantic Kernel X3D Agent</h1>
         <p>Type a natural language instruction to dynamically modify the 3D scene.</p>
         
-        <!-- X_ite X3D Browser Canvas -->
-        <x3d>
+        <!-- Correct X_ite custom element container -->
+        <x3d-canvas>
             <scene>
                 <inline url="scene.x3d"></inline>
             </scene>
-        </x3d>
+        </x3d-canvas>
 
         <div class="control-panel">
             <input type="text" id="promptInput" placeholder="e.g., Add a red sphere at 0 1 -3" />
@@ -88,7 +87,7 @@ async def get_viewer():
                 if (response.ok) {
                     statusDiv.textContent = data.message;
                     
-                    // Force X_ite to re-render by recreating the inline node
+                    // Recreate inline element inside scene to force full refresh
                     const sceneEl = document.querySelector('scene');
                     const oldInline = document.querySelector('inline');
                     if (oldInline) {
