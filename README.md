@@ -8,12 +8,9 @@ Ensure you have Python 3.8+ installed along with `pip`.
 ### 2. Install Dependencies
 Run the following command to install the required web framework packages:
 ```bash
-pip install fastapi uvicorn pydantic
-
-```
-```bash
+pip install fastapi uvicorn pydantic anthropic
+export ANTHROPIC_API_KEY=your_key_here
 uvicorn app:app --host 0.0.0.0 --port 8000 --reload
-
 ```
 
 
