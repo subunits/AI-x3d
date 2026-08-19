@@ -88,11 +88,15 @@ async def get_viewer():
                 if (response.ok) {
                     statusDiv.textContent = data.message;
                     
-                    // Correct fix: Update inline element's URL attribute with a cache-busting timestamp
-                    const inline = document.querySelector('inline');
-                    if (inline) {
-                        inline.setAttribute('url', 'scene.x3d?t=' + Date.now());
+                    // Force X_ite to re-render by recreating the inline node
+                    const sceneEl = document.querySelector('scene');
+                    const oldInline = document.querySelector('inline');
+                    if (oldInline) {
+                        oldInline.remove();
                     }
+                    const newInline = document.createElement('inline');
+                    newInline.setAttribute('url', 'scene.x3d?t=' + Date.now());
+                    sceneEl.appendChild(newInline);
                 } else {
                     statusDiv.textContent = "Error: " + (data.detail || "Unknown error");
                 }
@@ -111,7 +115,6 @@ async def get_scene():
 
 @app.post("/api/agent")
 async def run_agent(req: PromptRequest):
-    # Simplified mock parser/mutator for the agent workflow
     text = req.prompt.lower()
     
     if "sphere" in text:
@@ -142,7 +145,6 @@ async def run_agent(req: PromptRequest):
 """
         msg = "Added Cone with color 0 0 1."
 
-    # Read existing scene and inject the new shape inside <Scene>
     try:
         with open(SCENE_FILE, "r") as f:
             content = f.read()
