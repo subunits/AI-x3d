@@ -83,9 +83,8 @@ async def get_viewer():
                 const data = await response.json();
                 if (response.ok) {
                     statusDiv.textContent = data.message;
-                    inputField.value = ""; // Clear input safely
+                    inputField.value = ""; 
                     
-                    // Use X_ite canvas browser engine to load the updated URL with cache buster
                     const canvas = document.getElementById('x3dCanvas');
                     if (canvas && canvas.browser) {
                         await canvas.browser.loadURL(new X3D.MFString('scene.x3d?t=' + Date.now()));
@@ -98,7 +97,6 @@ async def get_viewer():
             }
         }
 
-        // Allow pressing Enter to submit
         document.getElementById('promptInput').addEventListener('keydown', function(event) {
             if (event.key === 'Enter') {
                 sendPrompt();
@@ -107,11 +105,11 @@ async def get_viewer():
     </script>
 </body>
 </html>
-"""
+"""[cite: 2]
 
 @app.get("/scene.x3d")
 async def get_scene():
-    return FileResponse(SCENE_FILE, media_type="model/x3d+xml")
+    return FileResponse(SCENE_FILE, media_type="model/x3d+xml")[cite: 2]
 
 @app.post("/api/agent")
 async def run_agent(req: PromptRequest):
@@ -159,4 +157,4 @@ async def run_agent(req: PromptRequest):
 
         return {"status": "success", "message": msg}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))[cite: 2]
