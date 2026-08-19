@@ -20,9 +20,13 @@ DEFAULT_X3D = """<?xml version="1.0" encoding="UTF-8"?>
 </X3D>
 """
 
-if not os.path.exists(SCENE_FILE):
-    with open(SCENE_FILE, "w") as f:
-        f.write(DEFAULT_X3D)
+def ensure_scene_file():
+    """Ensure scene.x3d exists and contains valid XML content."""
+    if not os.path.exists(SCENE_FILE):
+        with open(SCENE_FILE, "w") as f:
+            f.write(DEFAULT_X3D)
+
+ensure_scene_file()
 
 class PromptRequest(BaseModel):
     prompt: str
@@ -54,7 +58,6 @@ async def get_viewer():
         <h1>Semantic Kernel X3D Agent</h1>
         <p>Type a natural language instruction to dynamically modify the 3D scene.</p>
         
-        <!-- X_ite Canvas referencing the scene file directly -->
         <x3d-canvas src="scene.x3d" id="x3dCanvas"></x3d-canvas>
 
         <div class="control-panel">
@@ -105,11 +108,12 @@ async def get_viewer():
     </script>
 </body>
 </html>
-"""[cite: 2]
+"""
 
 @app.get("/scene.x3d")
 async def get_scene():
-    return FileResponse(SCENE_FILE, media_type="model/x3d+xml")[cite: 2]
+    ensure_scene_file()
+    return FileResponse(SCENE_FILE, media_type="model/x3d+xml")
 
 @app.post("/api/agent")
 async def run_agent(req: PromptRequest):
@@ -144,17 +148,25 @@ async def run_agent(req: PromptRequest):
         msg = "Added Cone successfully."
 
     try:
+        ensure_scene_file()
         with open(SCENE_FILE, "r") as f:
             content = f.read()
         
+        # Self-healing check: if Scene closing tag is missing, re-initialize file
+        if "</Scene>" not in content and "</scene>" not in content:
+            with open(SCENE_FILE, "w") as f:
+                f.write(DEFAULT_X3D)
+            with open(SCENE_FILE, "r") as f:
+                content = f.read()
+
         if "</Scene>" in content:
             updated_content = content.replace("</Scene>", f"{new_shape}  </Scene>")
         else:
-            raise HTTPException(status_code=500, detail="Invalid scene.x3d format structure.")
+            updated_content = content.replace("</scene>", f"{new_shape}  </scene>")
 
         with open(SCENE_FILE, "w") as f:
             f.write(updated_content)
 
         return {"status": "success", "message": msg}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))[cite: 2]
+        raise HTTPException(status_code=500, detail=str(e))
