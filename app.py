@@ -90,7 +90,6 @@ async def get_viewer():
                     
                     const canvas = document.getElementById('x3dCanvas');
                     if (canvas && canvas.browser) {
-                        canvas.browser.clear();
                         await canvas.browser.loadURL(new X3D.MFString('scene.x3d?t=' + Date.now()));
                     }
                 } else {
