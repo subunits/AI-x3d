@@ -21,7 +21,6 @@ DEFAULT_X3D = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 def ensure_scene_file():
-    """Ensure scene.x3d exists and contains valid XML content."""
     if not os.path.exists(SCENE_FILE):
         with open(SCENE_FILE, "w") as f:
             f.write(DEFAULT_X3D)
@@ -89,16 +88,11 @@ async def get_viewer():
                     statusDiv.textContent = data.message;
                     inputField.value = ""; 
                     
-                    // Force complete DOM re-render of the x3d-canvas to display new shapes
-                    const container = document.querySelector('.container');
-                    const oldCanvas = document.getElementById('x3dCanvas');
-                    if (oldCanvas) {
-                        oldCanvas.remove();
+                    const canvas = document.getElementById('x3dCanvas');
+                    if (canvas && canvas.browser) {
+                        canvas.browser.clear();
+                        await canvas.browser.loadURL(new X3D.MFString('scene.x3d?t=' + Date.now()));
                     }
-                    const newCanvas = document.createElement('x3d-canvas');
-                    newCanvas.setAttribute('src', 'scene.x3d?t=' + Date.now());
-                    newCanvas.id = 'x3dCanvas';
-                    container.insertBefore(newCanvas, document.querySelector('.control-panel'));
                 } else {
                     statusDiv.textContent = "Error: " + (data.detail || "Unknown error");
                 }
@@ -175,4 +169,4 @@ async def run_agent(req: PromptRequest):
 
         return {"status": "success", "message": msg}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))a
