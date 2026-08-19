@@ -42,8 +42,9 @@ async def get_viewer():
         .container { max-width: 900px; margin: auto; }
         x3d-canvas { width: 100%; height: 500px; border: 1px solid #444; border-radius: 8px; display: block; }
         .control-panel { margin-top: 15px; display: flex; gap: 10px; }
-        input[type="text"] { flex: 1; padding: 10px; border-radius: 4px; border: 1px solid #555; background: #222; color: #fff; }
-        button { padding: 10px 20px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        input[type="text"] { flex: 1; padding: 12px; border-radius: 4px; border: 1px solid #555; background: #222; color: #fff; font-size: 16px; outline: none; }
+        input[type="text"]:focus { border-color: #007acc; }
+        button { padding: 12px 24px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
         button:hover { background: #005999; }
         #status { margin-top: 10px; font-style: italic; color: #aaa; }
     </style>
@@ -53,11 +54,15 @@ async def get_viewer():
         <h1>Semantic Kernel X3D Agent</h1>
         <p>Type a natural language instruction to dynamically modify the 3D scene.</p>
         
-        <!-- Load scene.x3d directly into the canvas src attribute -->
-        <x3d-canvas src="scene.x3d" id="x3dCanvas"></x3d-canvas>
+        <!-- X_ite Canvas with inline scene child -->
+        <x3d-canvas id="x3dCanvas">
+            <scene>
+                <inline id="sceneInline" url="scene.x3d"></inline>
+            </scene>
+        </x3d-canvas>
 
         <div class="control-panel">
-            <input type="text" id="promptInput" placeholder="e.g., Add a red sphere at 0 1 -3" />
+            <input type="text" id="promptInput" placeholder="e.g., Add a red sphere at 0 1 -3" autocomplete="off" />
             <button onclick="sendPrompt()">Run</button>
         </div>
         <div id="status">System ready...</div>
@@ -65,9 +70,10 @@ async def get_viewer():
 
     <script>
         async function sendPrompt() {
-            const promptText = document.getElementById('promptInput').value;
+            const inputField = document.getElementById('promptInput');
+            const promptText = inputField.value;
             const statusDiv = document.getElementById('status');
-            if (!promptText) return;
+            if (!promptText.trim()) return;
 
             statusDiv.textContent = "Sending: " + promptText;
 
@@ -81,10 +87,13 @@ async def get_viewer():
                 const data = await response.json();
                 if (response.ok) {
                     statusDiv.textContent = data.message;
+                    inputField.value = ""; // Clear input on success
                     
-                    // Force X_ite canvas to reload the updated file with a cache buster
-                    const canvas = document.getElementById('x3dCanvas');
-                    canvas.setAttribute('src', 'scene.x3d?t=' + Date.now());
+                    // Re-trigger the inline element fetch with timestamp cache-buster
+                    const inlineEl = document.getElementById('sceneInline');
+                    if (inlineEl) {
+                        inlineEl.setAttribute('url', 'scene.x3d?t=' + Date.now());
+                    }
                 } else {
                     statusDiv.textContent = "Error: " + (data.detail || "Unknown error");
                 }
@@ -92,6 +101,13 @@ async def get_viewer():
                 statusDiv.textContent = "Network Error: " + err.message;
             }
         }
+
+        // Allow pressing Enter key to submit prompt
+        document.getElementById('promptInput').addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                sendPrompt();
+            }
+        });
     </script>
 </body>
 </html>
@@ -113,7 +129,7 @@ async def run_agent(req: PromptRequest):
       </Appearance>
     </Shape>
 """
-        msg = "Added Sphere at 0 1 -3 with color 1 0 0."
+        msg = "Added Sphere successfully."
     elif "box" in text or "cube" in text:
         new_shape = """    <Shape>
       <Box size="1.5 1.5 1.5"/>
@@ -122,7 +138,7 @@ async def run_agent(req: PromptRequest):
       </Appearance>
     </Shape>
 """
-        msg = "Added Box with color 0 1 0."
+        msg = "Added Box successfully."
     else:
         new_shape = """    <Shape>
       <Cone bottomRadius="1" height="2"/>
@@ -131,7 +147,7 @@ async def run_agent(req: PromptRequest):
       </Appearance>
     </Shape>
 """
-        msg = "Added Cone with color 0 0 1."
+        msg = "Added Cone successfully."
 
     try:
         with open(SCENE_FILE, "r") as f:
