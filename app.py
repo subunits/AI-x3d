@@ -1,126 +1,160 @@
 import os
-import re
-import xml.etree.ElementTree as ET
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 
 app = FastAPI()
-FILE_PATH = "scene.x3d"
 
-# Initialize default X3D scene with a ground box if it doesn't exist
-if not os.path.exists(FILE_PATH):
-    root = ET.Element("X3D", version="3.3", profile="Immersive")
-    scene = ET.SubElement(root, "Scene")
-    transform = ET.SubElement(scene, "Transform", DEF="Ground", translation="0 -1 0")
-    shape = ET.SubElement(transform, "Shape")
-    appearance = ET.SubElement(shape, "Appearance")
-    ET.SubElement(appearance, "Material", diffuseColor="0.2 0.7 0.2")
-    ET.SubElement(shape, "Box", size="10 0.1 10")
-    ET.ElementTree(root).write(FILE_PATH)
+# Ensure a default scene.x3d exists on startup
+SCENE_FILE = "scene.x3d"
+DEFAULT_X3D = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE X3D PUBLIC "http://www.web3d.org/specifications/x3d-3.3.dtd" "http://www.web3d.org/specifications/x3d-3.3.dtd">
+<X3D profile="Interchange" version="3.3" xmlns:xsd="http://www.w3.org/2001/XMLSchema-instance" xsd:noNamespaceSchemaLocation="http://www.web3d.org/specifications/x3d-3.3.dtd">
+  <Scene>
+    <Shape>
+      <Box size="2 2 2"/>
+      <Appearance>
+        <Material diffuseColor="0.8 0.8 0.8"/>
+      </Appearance>
+    </Shape>
+  </Scene>
+</X3D>
+"""
 
-def add_shape_mock(prompt: str) -> str:
-    # Basic keyword extraction for shapes
-    shape_type = "Box"
-    p = prompt.lower()
-    if "sphere" in p: shape_type = "Sphere"
-    elif "cylinder" in p: shape_type = "Cylinder"
-    elif "cone" in p: shape_type = "Cone"
-    
-    # Basic keyword extraction for colors
-    color = "1 0 0" # Default red
-    if "blue" in p: color = "0 0 1"
-    elif "green" in p: color = "0 1 0"
-    elif "yellow" in p: color = "1 1 0"
-    elif "white" in p: color = "1 1 1"
-    elif "orange" in p: color = "1 0.5 0"
-    
-    # Extract coordinates if provided (e.g., "0 2 -2")
-    coords = "0 1 -3"
-    match = re.search(r'(-?\d+\.?\d*\s+-?\d+\.?\d*\s+-?\d+\.?\d*)', prompt)
-    if match:
-        coords = match.group(1)
-
-    # Mutate the XML file
-    tree = ET.parse(FILE_PATH)
-    scene = tree.getroot().find(".//Scene")
-    def_name = f"Object_{len(scene)}"
-    
-    transform = ET.SubElement(scene, "Transform", DEF=def_name, translation=coords)
-    shape = ET.SubElement(transform, "Shape")
-    appearance = ET.SubElement(shape, "Appearance")
-    ET.SubElement(appearance, "Material", diffuseColor=color)
-    ET.SubElement(shape, shape_type)
-    tree.write(FILE_PATH)
-    
-    return f"Added {shape_type} at {coords} with color {color}."
+if not os.path.exists(SCENE_FILE):
+    with open(SCENE_FILE, "w") as f:
+        f.write(DEFAULT_X3D)
 
 class PromptRequest(BaseModel):
     prompt: str
 
-@app.post("/api/agent")
-async def run_agent(req: PromptRequest):
-    try:
-        response_msg = add_shape_mock(req.prompt)
-        return {"status": "success", "response": response_msg}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/scene.x3d")
-async def get_x3d_file():
-    return FileResponse(FILE_PATH, media_type="application/xml")
-
 @app.get("/", response_class=HTMLResponse)
-async def get_frontend():
-    return """<!DOCTYPE html>
-<html>
+async def get_viewer():
+    return """
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<title>X3D Agent Viewer</title>
-<script src="https://create3d.org/x-ite/latest/x-ite.min.js"></script>
-<style>
-body { font-family: sans-serif; display: flex; height: 100vh; margin: 0; background: #121212; color: #fff; }
-#viewer { flex: 2; height: 100%; }
-#control-panel { flex: 1; padding: 20px; display: flex; flex-direction: column; background: #1e1e1e; border-left: 1px solid #333; }
-textarea { width: 100%; height: 100px; background: #2d2d2d; color: #fff; border: 1px solid #444; padding: 10px; margin-bottom: 10px; resize: none; }
-button { padding: 10px; background: #007acc; color: white; border: none; cursor: pointer; font-weight: bold; }
-button:hover { background: #005999; }
-#log { flex-grow: 1; background: #111; padding: 10px; margin-top: 10px; overflow-y: auto; font-family: monospace; font-size: 12px; border: 1px solid #333; }
-</style>
+    <meta charset="UTF-8">
+    <title>Semantic Kernel X3D Agent</title>
+    <!-- X_ite Viewer Stylesheet & Script -->
+    <link rel="stylesheet" href="https://create3000.github.io/code/x_ite/latest/x_ite.css">
+    <script src="https://create3000.github.io/code/x_ite/latest/x_ite.min.js" defer></script>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 20px; background: #111; color: #fff; }
+        .container { max-width: 900px; margin: auto; }
+        x3d { width: 100%; height: 500px; border: 1px solid #444; border-radius: 8px; }
+        .control-panel { margin-top: 15px; display: flex; gap: 10px; }
+        input[type="text"] { flex: 1; padding: 10px; border-radius: 4px; border: 1px solid #555; background: #222; color: #fff; }
+        button { padding: 10px 20px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #005999; }
+        #status { margin-top: 10px; font-style: italic; color: #aaa; }
+    </style>
 </head>
 <body>
-<div id="viewer">
-    <x3d><scene><inline url="scene.x3d"></inline></scene></x3d>
-</div>
-<div id="control-panel">
-    <h3>3D Scene Controller</h3>
-    <textarea id="promptInput" placeholder="Type something like: Add an orange sphere at 0 2 -2"></textarea>
-    <button onclick="sendPrompt()">Run Command</button>
-    <div id="log">System ready...</div>
-</div>
-<script>
-async function sendPrompt() {
-    const promptInput = document.getElementById('promptInput');
-    const prompt = promptInput.value;
-    const log = document.getElementById('log');
-    if (!prompt.trim()) return;
-    
-    log.innerHTML += `<div>Sending: ${prompt}</div>`;
-    try {
-        const res = await fetch('/api/agent', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({prompt})
-        });
-        const data = await res.json();
-        log.innerHTML += `<div><b>System:</b> ${data.response}</div>`;
-        // Force X-ite inline viewer to reload the mutated X3D file
-        document.querySelector('inline').loadURL(["scene.x3d?" + Date.now()]);
-    } catch (err) {
-        log.innerHTML += `<div style="color:red;">Error: ${err}</div>`;
-    }
-    log.scrollTop = log.scrollHeight;
-    promptInput.value = '';
-}
-</script>
+    <div class="container">
+        <h1>Semantic Kernel X3D Agent</h1>
+        <p>Type a natural language instruction to dynamically modify the 3D scene.</p>
+        
+        <!-- X_ite X3D Browser Canvas -->
+        <x3d>
+            <scene>
+                <inline url="scene.x3d"></inline>
+            </scene>
+        </x3d>
+
+        <div class="control-panel">
+            <input type="text" id="promptInput" placeholder="e.g., Add a red sphere at 0 1 -3" />
+            <button onclick="sendPrompt()">Run</button>
+        </div>
+        <div id="status">System ready...</div>
+    </div>
+
+    <script>
+        async function sendPrompt() {
+            const promptText = document.getElementById('promptInput').value;
+            const statusDiv = document.getElementById('status');
+            if (!promptText) return;
+
+            statusDiv.textContent = "Sending: " + promptText;
+
+            try {
+                const response = await fetch('/api/agent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: promptText })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    statusDiv.textContent = data.message;
+                    
+                    // Correct fix: Update inline element's URL attribute with a cache-busting timestamp
+                    const inline = document.querySelector('inline');
+                    if (inline) {
+                        inline.setAttribute('url', 'scene.x3d?t=' + Date.now());
+                    }
+                } else {
+                    statusDiv.textContent = "Error: " + (data.detail || "Unknown error");
+                }
+            } catch (err) {
+                statusDiv.textContent = "Network Error: " + err.message;
+            }
+        }
+    </script>
 </body>
-</html>"""
+</html>
+"""
+
+@app.get("/scene.x3d")
+async def get_scene():
+    return FileResponse(SCENE_FILE, media_type="model/x3d+xml")
+
+@app.post("/api/agent")
+async def run_agent(req: PromptRequest):
+    # Simplified mock parser/mutator for the agent workflow
+    text = req.prompt.lower()
+    
+    if "sphere" in text:
+        new_shape = """    <Shape>
+      <Sphere radius="1"/>
+      <Appearance>
+        <Material diffuseColor="1 0 0"/>
+      </Appearance>
+    </Shape>
+"""
+        msg = "Added Sphere at 0 1 -3 with color 1 0 0."
+    elif "box" in text or "cube" in text:
+        new_shape = """    <Shape>
+      <Box size="1.5 1.5 1.5"/>
+      <Appearance>
+        <Material diffuseColor="0 1 0"/>
+      </Appearance>
+    </Shape>
+"""
+        msg = "Added Box with color 0 1 0."
+    else:
+        new_shape = """    <Shape>
+      <Cone bottomRadius="1" height="2"/>
+      <Appearance>
+        <Material diffuseColor="0 0 1"/>
+      </Appearance>
+    </Shape>
+"""
+        msg = "Added Cone with color 0 0 1."
+
+    # Read existing scene and inject the new shape inside <Scene>
+    try:
+        with open(SCENE_FILE, "r") as f:
+            content = f.read()
+        
+        if "</Scene>" in content:
+            updated_content = content.replace("</Scene>", f"{new_shape}  </Scene>")
+        else:
+            raise HTTPException(status_code=500, detail="Invalid scene.x3d format structure.")
+
+        with open(SCENE_FILE, "w") as f:
+            f.write(updated_content)
+
+        return {"status": "success", "message": msg}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
