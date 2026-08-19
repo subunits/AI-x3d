@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-# Ensure a default scene.x3d exists on startup
 SCENE_FILE = "scene.x3d"
 DEFAULT_X3D = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE X3D PUBLIC "http://www.web3d.org/specifications/x3d-3.3.dtd" "http://www.web3d.org/specifications/x3d-3.3.dtd">
@@ -54,12 +53,8 @@ async def get_viewer():
         <h1>Semantic Kernel X3D Agent</h1>
         <p>Type a natural language instruction to dynamically modify the 3D scene.</p>
         
-        <!-- Correct X_ite custom element container -->
-        <x3d-canvas>
-            <scene>
-                <inline url="scene.x3d"></inline>
-            </scene>
-        </x3d-canvas>
+        <!-- Load scene.x3d directly into the canvas src attribute -->
+        <x3d-canvas src="scene.x3d" id="x3dCanvas"></x3d-canvas>
 
         <div class="control-panel">
             <input type="text" id="promptInput" placeholder="e.g., Add a red sphere at 0 1 -3" />
@@ -87,15 +82,9 @@ async def get_viewer():
                 if (response.ok) {
                     statusDiv.textContent = data.message;
                     
-                    // Recreate inline element inside scene to force full refresh
-                    const sceneEl = document.querySelector('scene');
-                    const oldInline = document.querySelector('inline');
-                    if (oldInline) {
-                        oldInline.remove();
-                    }
-                    const newInline = document.createElement('inline');
-                    newInline.setAttribute('url', 'scene.x3d?t=' + Date.now());
-                    sceneEl.appendChild(newInline);
+                    // Force X_ite canvas to reload the updated file with a cache buster
+                    const canvas = document.getElementById('x3dCanvas');
+                    canvas.setAttribute('src', 'scene.x3d?t=' + Date.now());
                 } else {
                     statusDiv.textContent = "Error: " + (data.detail || "Unknown error");
                 }
