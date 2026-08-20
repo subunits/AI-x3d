@@ -10,6 +10,9 @@ Run the following command to install the required web framework packages:
 
 ```bash
 pip install fastapi uvicorn pydantic
+```
+
+```bash
 uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
