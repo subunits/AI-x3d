@@ -670,52 +670,235 @@ HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>X3D Agent Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>X3D Agent</title>
   <script src="https://create3000.github.io/code/x_ite/latest/x_ite.min.js"></script>
   <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d0d0d;color:#e0e0e0;height:100vh;display:flex;flex-direction:column}
-    header{padding:14px 24px;background:#161616;border-bottom:1px solid #2a2a2a;display:flex;align-items:center;gap:12px}
-    header h1{font-size:18px;font-weight:600;color:#fff}
-    .badge{font-size:11px;background:#7c3aed;color:white;padding:2px 8px;border-radius:99px;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
-    .main{display:flex;flex:1;overflow:hidden}
-    .viewport{flex:1;background:#111;min-height:0}
-    x3d-canvas{width:100%;height:100%;display:block}
-    .sidebar{width:340px;background:#141414;border-left:1px solid #222;display:flex;flex-direction:column}
-    .console-log{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
-    .entry{border-radius:6px;padding:8px 10px;font-size:13px;line-height:1.5}
-    .entry.user{background:#1e1e2e;border-left:3px solid #7c3aed;color:#c4b5fd}
-    .entry.ai{background:#0f1f18;border-left:3px solid #10b981;color:#6ee7b7}
-    .entry.error{background:#1f0f0f;border-left:3px solid #ef4444;color:#fca5a5}
-    .entry.sys{color:#555;font-size:11px;font-style:italic}
-    .lbl{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px;opacity:.7}
-    .input-area{padding:12px;border-top:1px solid #222;display:flex;flex-direction:column;gap:8px}
-    textarea{width:100%;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#e0e0e0;font-size:13px;resize:none;outline:none;font-family:inherit}
-    textarea:focus{border-color:#7c3aed}
-    .btn-row{display:flex;gap:8px}
-    button{flex:1;padding:9px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600}
-    button:hover{opacity:.85}
-    button:disabled{opacity:.4;cursor:not-allowed}
-    #runBtn{background:#7c3aed;color:white}
-    #clearBtn{background:#222;color:#aaa;border:1px solid #333}
-    .hint{font-size:11px;color:#444;text-align:center}
-    .chips{display:flex;flex-wrap:wrap;gap:4px;padding:0 12px 8px}
-    .chip{font-size:11px;padding:3px 8px;background:#1e1e2e;color:#a78bfa;border-radius:99px;cursor:pointer;border:1px solid #2d2d4e}
-    .chip:hover{background:#2d2d4e}
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent:   #7c3aed;
+      --accent-l: #a78bfa;
+      --green:    #10b981;
+      --green-l:  #6ee7b7;
+      --red:      #ef4444;
+      --red-l:    #fca5a5;
+      --bg:       #0d0d0d;
+      --bg2:      #141414;
+      --bg3:      #1a1a1a;
+      --border:   #222;
+      --text:     #e0e0e0;
+      --muted:    #555;
+      --safe-b:   env(safe-area-inset-bottom, 0px);
+      --safe-t:   env(safe-area-inset-top, 0px);
+      --safe-l:   env(safe-area-inset-left, 0px);
+      --safe-r:   env(safe-area-inset-right, 0px);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+      overflow: hidden;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    /* ── Layout shell ─────────────────────────────────────── */
+    .shell {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;           /* dynamic viewport height — collapses iOS browser chrome */
+      padding-top: var(--safe-t);
+    }
+
+    header {
+      flex-shrink: 0;
+      padding: 12px 16px;
+      padding-left:  max(16px, var(--safe-l));
+      padding-right: max(16px, var(--safe-r));
+      background: #161616;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    header h1  { font-size: 17px; font-weight: 700; color: #fff; }
+    .badge {
+      font-size: 10px; background: var(--accent); color: #fff;
+      padding: 2px 8px; border-radius: 99px; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+    }
+
+    /* ── Main area: viewport + panel ─────────────────────── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;   /* mobile: stacked */
+      overflow: hidden;
+    }
+
+    /* Viewport */
+    .viewport {
+      flex: 1;
+      background: #111;
+      min-height: 0;
+      position: relative;
+    }
+    x3d-canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+
+    /* Panel (console + chips + input) */
+    .panel {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      max-height: 52vh;         /* cap so viewport stays visible */
+      overflow: hidden;
+    }
+
+    /* Console log */
+    .console-log {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .entry {
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .entry.user  { background: #1e1e2e; border-left: 3px solid var(--accent);  color: #c4b5fd; }
+    .entry.ai    { background: #0f1f18; border-left: 3px solid var(--green);   color: var(--green-l); }
+    .entry.error { background: #1f0f0f; border-left: 3px solid var(--red);     color: var(--red-l); }
+    .entry.sys   { color: var(--muted); font-size: 11px; font-style: italic; }
+    .lbl { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 2px; opacity: .65; }
+
+    /* Chips */
+    .chips {
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      gap: 6px;
+      padding: 6px 12px;
+      scrollbar-width: none;
+    }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip {
+      flex-shrink: 0;
+      font-size: 12px;
+      padding: 5px 12px;
+      background: #1e1e2e;
+      color: var(--accent-l);
+      border-radius: 99px;
+      cursor: pointer;
+      border: 1px solid #2d2d4e;
+      white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .chip:active { background: #2d2d4e; }
+
+    /* Input area */
+    .input-area {
+      flex-shrink: 0;
+      padding: 10px 12px;
+      padding-bottom: max(10px, var(--safe-b));
+      padding-left:  max(12px, var(--safe-l));
+      padding-right: max(12px, var(--safe-r));
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--bg2);
+    }
+    textarea {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg3);
+      border: 1px solid #333;
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 16px;          /* ≥16px prevents iOS auto-zoom */
+      line-height: 1.4;
+      resize: none;
+      outline: none;
+      font-family: inherit;
+      -webkit-appearance: none;
+    }
+    textarea:focus { border-color: var(--accent); }
+
+    .btn-row { display: flex; gap: 8px; }
+    button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 700;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    button:active  { opacity: .75; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    #runBtn   { background: var(--accent); color: #fff; }
+    #clearBtn { background: #222; color: #aaa; border: 1px solid #333; }
+
+    .hint { font-size: 11px; color: #3a3a3a; text-align: center; }
+
+    /* ── Tablet / desktop: side-by-side ───────────────────── */
+    @media (min-width: 700px) {
+      .main { flex-direction: row; }
+
+      .viewport { flex: 1; }
+
+      .panel {
+        width: 340px;
+        max-height: none;
+        height: 100%;
+        border-top: none;
+        border-left: 1px solid var(--border);
+      }
+
+      .chips {
+        flex-wrap: wrap;
+        overflow-x: visible;
+        padding: 4px 12px 8px;
+      }
+
+      textarea { font-size: 13px; }   /* desktop can stay compact */
+    }
+
+    /* ── Large tablet landscape (iPad Pro etc.) ───────────── */
+    @media (min-width: 1024px) {
+      .panel { width: 380px; }
+      header h1 { font-size: 18px; }
+    }
   </style>
 </head>
 <body>
+<div class="shell">
   <header>
-    <h1>X3D Agent Console</h1>
+    <h1>X3D Agent</h1>
     <span class="badge">Rule-Based NL</span>
   </header>
   <div class="main">
     <div class="viewport">
-      <x3d-canvas id="canvas" src="/scene.x3d" style="width:100%;height:100%"></x3d-canvas>
+      <x3d-canvas id="canvas" src="/scene.x3d"></x3d-canvas>
     </div>
-    <div class="sidebar">
+    <div class="panel">
       <div class="console-log" id="log">
-        <div class="entry sys">Scene ready. Try the examples below or type your own.</div>
+        <div class="entry sys">Scene ready — tap a chip or type a command.</div>
       </div>
       <div class="chips">
         <span class="chip" onclick="quick('place a red sphere to the left')">red sphere</span>
@@ -734,68 +917,69 @@ HTML = """<!DOCTYPE html>
         <span class="chip" onclick="quick('clear')">clear</span>
       </div>
       <div class="input-area">
-        <textarea id="inp" rows="3" placeholder="spawn a huge ruby donut at 0 1 0&#10;place a tilted neon green icosahedron above&#10;give me a ghost blue sphere to the right&#10;clear"></textarea>
+        <textarea id="inp" rows="2" placeholder="spawn a ruby donut… place a ghost cube… clear"></textarea>
         <div class="btn-row">
           <button id="runBtn" onclick="run()">&#9654; Run</button>
           <button id="clearBtn" onclick="clearAll()">&#10005; Clear</button>
         </div>
-        <div class="hint">Enter or click Run &bull; Drag to orbit in viewport</div>
+        <div class="hint">Tap Run or press Enter &bull; Drag viewport to orbit</div>
       </div>
     </div>
   </div>
-  <script>
-    const log    = document.getElementById('log');
-    const inp    = document.getElementById('inp');
-    const runBtn = document.getElementById('runBtn');
-    const canvas = document.getElementById('canvas');
+</div>
+<script>
+  const log    = document.getElementById('log');
+  const inp    = document.getElementById('inp');
+  const runBtn = document.getElementById('runBtn');
+  const canvas = document.getElementById('canvas');
 
-    function addLog(cls, label, text) {
-      const d = document.createElement('div');
-      d.className = 'entry ' + cls;
-      d.innerHTML = '<div class="lbl">' + label + '</div>' +
-        String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      log.appendChild(d);
-      log.scrollTop = log.scrollHeight;
-    }
+  function addLog(cls, label, text) {
+    const d = document.createElement('div');
+    d.className = 'entry ' + cls;
+    d.innerHTML = '<div class="lbl">' + label + '</div>' +
+      String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
 
-    function reload() {
-      const url = '/scene.x3d?t=' + Date.now();
-      try {
-        if (canvas.browser) canvas.browser.loadURL(new X3D.MFString(url));
-        else canvas.setAttribute('src', url);
-      } catch(e) { canvas.setAttribute('src', url); }
-    }
+  function reload() {
+    const url = '/scene.x3d?t=' + Date.now();
+    try {
+      if (canvas.browser) canvas.browser.loadURL(new X3D.MFString(url));
+      else canvas.setAttribute('src', url);
+    } catch(e) { canvas.setAttribute('src', url); }
+  }
 
-    async function run() {
-      const text = inp.value.trim();
-      if (!text) return;
-      addLog('user', 'You', text);
-      inp.value = '';
-      runBtn.disabled = true;
-      try {
-        const res  = await fetch('/api/agent', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({prompt: text})
-        });
-        const data = await res.json();
-        if (res.ok) { addLog('ai', 'Scene', data.message); reload(); }
-        else        { addLog('error', 'Error', data.detail || 'Unknown'); }
-      } catch(e) { addLog('error', 'Network', e.message); }
-      finally { runBtn.disabled = false; }
-    }
+  async function run() {
+    const text = inp.value.trim();
+    if (!text) return;
+    addLog('user', 'You', text);
+    inp.value = '';
+    runBtn.disabled = true;
+    try {
+      const res  = await fetch('/api/agent', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({prompt: text})
+      });
+      const data = await res.json();
+      if (res.ok) { addLog('ai', 'Scene', data.message); reload(); }
+      else        { addLog('error', 'Error', data.detail || 'Unknown'); }
+    } catch(e) { addLog('error', 'Network', e.message); }
+    finally { runBtn.disabled = false; }
+  }
 
-    async function clearAll() {
-      await fetch('/api/clear', {method:'POST'});
-      addLog('sys', 'System', 'Scene cleared.');
-      reload();
-    }
+  async function clearAll() {
+    await fetch('/api/clear', {method: 'POST'});
+    addLog('sys', 'System', 'Scene cleared.');
+    reload();
+  }
 
-    function quick(text) { inp.value = text; run(); }
+  function quick(text) { inp.value = text; run(); }
 
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(); }
-    });
-  </script>
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(); }
+  });
+</script>
 </body>
 </html>
 """
