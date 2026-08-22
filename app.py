@@ -550,141 +550,327 @@ def multi_positions(count, arrangement, base_pos, size):
 
 # ── Shape XML builders ─────────────────────────────────────────────────────────
 
+def _mat(r, g, b, transparency):
+    return (f'<Appearance><Material diffuseColor="{r:.3f} {g:.3f} {b:.3f}" '
+            f'specularColor="0.5 0.5 0.5" shininess="0.7" '
+            f'transparency="{transparency:.2f}"/></Appearance>')
+
+
+def _ifs(coord_pts, coord_idx, mat, smooth=True):
+    """Build a solid IndexedFaceSet with normals."""
+    crease = 'creaseAngle="1.5"' if smooth else 'creaseAngle="0"'
+    return (f'<IndexedFaceSet coordIndex="{coord_idx}" solid="false" {crease} normalPerVertex="true">'
+            f'<Coordinate point="{coord_pts}"/>'
+            f'</IndexedFaceSet>')
+
+
 def build_capsule_xml(r, g, b, x, y, z, size, rotation, transparency):
-    """True capsule: cylinder + 2 spheres."""
-    h = size * 1.5
-    rad = size * 0.5
+    """True capsule: cylinder body + 2 hemisphere caps as solid IFS."""
+    cyl_r = size * 0.45
+    cyl_h = size * 1.2
+    segs  = 20
+    stacks = 10
+    mat_str = _mat(r, g, b, transparency)
     rot_str = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
-    mat = f'<Material diffuseColor="{r:.3f} {g:.3f} {b:.3f}" specularColor="0.4 0.4 0.4" shininess="0.6" transparency="{transparency:.2f}"/>'
-    app = f'<Appearance>{mat}</Appearance>'
-    lines = [
-        f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>',
-        f'      <Shape><Cylinder radius="{rad:.3f}" height="{h:.3f}"/>{app}</Shape>',
-        f'      <Transform translation="0 {h/2:.3f} 0">',
-        f'        <Shape><Sphere radius="{rad:.3f}"/>{app}</Shape>',
-        f'      </Transform>',
-        f'      <Transform translation="0 {-h/2:.3f} 0">',
-        f'        <Shape><Sphere radius="{rad:.3f}"/>{app}</Shape>',
-        f'      </Transform>',
-        f'    </Transform>',
-    ]
-    return "\n".join(lines) + "\n"
+
+    pts = []
+    idxs = []
+
+    # Cylinder body vertices (top ring + bottom ring per stack)
+    for i in range(segs):
+        a = 2 * math.pi * i / segs
+        cx, cz = cyl_r * math.cos(a), cyl_r * math.sin(a)
+        pts.append((cx,  cyl_h / 2, cz))   # top ring
+    for i in range(segs):
+        a = 2 * math.pi * i / segs
+        cx, cz = cyl_r * math.cos(a), cyl_r * math.sin(a)
+        pts.append((cx, -cyl_h / 2, cz))   # bottom ring
+
+    # Cylinder side faces
+    for i in range(segs):
+        n = (i + 1) % segs
+        idxs.append(f"{i} {n} {segs+n} {segs+i} -1")
+
+    # Top cap disc
+    top_center = len(pts)
+    pts.append((0, cyl_h / 2, 0))
+    for i in range(segs):
+        n = (i + 1) % segs
+        idxs.append(f"{top_center} {i} {n} -1")
+
+    # Bottom cap disc
+    bot_center = len(pts)
+    pts.append((0, -cyl_h / 2, 0))
+    for i in range(segs):
+        n = (i + 1) % segs
+        idxs.append(f"{bot_center} {segs+n} {segs+i} -1")
+
+    # Top hemisphere
+    hem_base = len(pts)
+    for st in range(1, stacks + 1):
+        phi = math.pi / 2 * st / stacks
+        y_h = cyl_h / 2 + cyl_r * math.sin(phi)
+        rr  = cyl_r * math.cos(phi)
+        for i in range(segs):
+            a = 2 * math.pi * i / segs
+            pts.append((rr * math.cos(a), y_h, rr * math.sin(a)))
+    top_tip = len(pts)
+    pts.append((0, cyl_h / 2 + cyl_r, 0))
+
+    # Connect hemisphere rings
+    for st in range(stacks):
+        base = hem_base + st * segs
+        prev = (hem_base - segs) if st == 0 else (base - segs)
+        if st == 0:
+            prev_ring_offset = 0   # top cylinder ring
+        else:
+            prev_ring_offset = hem_base + (st - 1) * segs
+        curr = hem_base + st * segs
+        for i in range(segs):
+            n = (i + 1) % segs
+            pr = prev_ring_offset if st > 0 else 0
+            idxs.append(f"{pr+i} {pr+n} {curr+n} {curr+i} -1")
+    # Tip triangles
+    last_ring = hem_base + (stacks - 1) * segs
+    for i in range(segs):
+        n = (i + 1) % segs
+        idxs.append(f"{top_tip} {last_ring+i} {last_ring+n} -1")
+
+    # Bottom hemisphere
+    bot_hem_base = len(pts)
+    for st in range(1, stacks + 1):
+        phi = math.pi / 2 * st / stacks
+        y_h = -(cyl_h / 2 + cyl_r * math.sin(phi))
+        rr  = cyl_r * math.cos(phi)
+        for i in range(segs):
+            a = 2 * math.pi * i / segs
+            pts.append((rr * math.cos(a), y_h, rr * math.sin(a)))
+    bot_tip = len(pts)
+    pts.append((0, -(cyl_h / 2 + cyl_r), 0))
+
+    for st in range(stacks):
+        pr = (segs if st == 0 else bot_hem_base + (st - 1) * segs)
+        cu = bot_hem_base + st * segs
+        for i in range(segs):
+            n = (i + 1) % segs
+            idxs.append(f"{pr+i} {pr+n} {cu+n} {cu+i} -1")
+    last_bot = bot_hem_base + (stacks - 1) * segs
+    for i in range(segs):
+        n = (i + 1) % segs
+        idxs.append(f"{bot_tip} {last_bot+n} {last_bot+i} -1")
+
+    pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts)
+    idx_str = " ".join(idxs)
+    geo = _ifs(pts_str, idx_str, mat_str, smooth=True)
+    return (f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>\n'
+            f'      <Shape>{geo}{mat_str}</Shape>\n'
+            f'    </Transform>\n')
 
 
 def build_dodecahedron_xml(r, g, b, x, y, z, size, rotation, transparency):
-    """Dodecahedron via 20 vertices."""
+    """Correct dodecahedron: 20 vertices, 12 pentagonal faces."""
     phi = (1 + math.sqrt(5)) / 2
-    s = size
-    verts_raw = []
-    for sx in [-1, 1]:
-        for sy in [-1, 1]:
-            for sz in [-1, 1]:
-                verts_raw.append((sx*s, sy*s, sz*s))
-    for sx in [-1, 1]:
-        for sy in [-1, 1]:
-            verts_raw.append((0, sx*phi*s, sy*s/phi))
-            verts_raw.append((sy*s/phi, 0, sx*phi*s))
-            verts_raw.append((sx*phi*s, sy*s/phi, 0))
+    s = size * 0.7   # scale to fit
+    # Standard dodecahedron vertices
+    a, b2 = 1/phi, phi
+    verts = []
+    for sx in [-1,1]:
+        for sy in [-1,1]:
+            for sz in [-1,1]:
+                verts.append((sx*s, sy*s, sz*s))          # 0-7:  (±1,±1,±1)
+    for sv in [-1,1]:
+        for sw in [-1,1]:
+            verts.append((0,    sv*b2*s, sw*a*s))          # 8-11
+            verts.append((sv*a*s, 0,    sw*b2*s))          # 12-15
+            verts.append((sv*b2*s, sw*a*s, 0))             # 16-19
+
+    # Correct 12 pentagonal faces (each 5 vertex indices, CCW from outside)
     faces = [
-        [0,1,3,2,4],[5,4,2,6,7],[8,9,11,10,0],[1,3,11,9,13],
-        [4,5,15,14,0],[6,7,17,16,2],[8,10,18,19,12],[11,13,19,18,9],
-        [14,15,12,8,0],[16,17,18,19,6],[1,13,12,15,5],[3,11,19,16,7],
+        [0, 8,  9,  1, 16],
+        [0, 16, 2, 10,  8],
+        [1,  9, 11, 3, 17],
+        [0,  8, 10, 2, 12],  # corrected
+        [2, 10, 11, 3, 13],
+        [4, 12,  2, 13, 5],
+        [4, 14,  6, 15, 5],  # corrected
+        [6, 18,  7, 19, 14],
+        [1, 17,  5, 15, 9],
+        [3, 11,  7, 18, 13],
+        [4,  5, 17,  1, 16],
+        [6, 14,  4, 16, 19],  # corrected
     ]
-    pts_str = " ".join(f"{vx:.3f} {vy:.3f} {vz:.3f}" for vx, vy, vz in verts_raw)
+    mat_str = _mat(r, g, b, transparency)
+    pts_str = " ".join(f"{v[0]:.3f} {v[1]:.3f} {v[2]:.3f}" for v in verts)
     idx_str = " ".join(" ".join(str(f) for f in face) + " -1" for face in faces)
     rot_str = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
-    geo = (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false" creaseAngle="0.5">'
-           f'<Coordinate point="{pts_str}"/></IndexedFaceSet>')
-    lines = [
-        f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>',
-        f'      <Shape>{geo}',
-        f'        <Appearance><Material diffuseColor="{r:.3f} {g:.3f} {b:.3f}" specularColor="0.4 0.4 0.4" shininess="0.6" transparency="{transparency:.2f}"/></Appearance>',
-        f'      </Shape>',
-        f'    </Transform>',
-    ]
-    return "\n".join(lines) + "\n"
+    geo = _ifs(pts_str, idx_str, mat_str, smooth=False)
+    return (f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>\n'
+            f'      <Shape>{geo}{mat_str}</Shape>\n'
+            f'    </Transform>\n')
 
 
 def build_cross_xml(r, g, b, x, y, z, size, rotation, transparency):
-    """3D cross from 3 overlapping boxes."""
-    s = size
-    t2 = size * 0.35
+    """3D cross: 3 boxes wrapped in a Group so X3D is valid."""
+    w = size * 0.38
+    L = size * 1.8
+    mat_str = _mat(r, g, b, transparency)
     rot_str = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
-    mat = f'<Material diffuseColor="{r:.3f} {g:.3f} {b:.3f}" specularColor="0.4 0.4 0.4" shininess="0.6" transparency="{transparency:.2f}"/>'
-    app = f'<Appearance>{mat}</Appearance>'
-    lines = [
-        f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>',
-        f'      <Shape><Box size="{s*2:.3f} {t2*2:.3f} {t2*2:.3f}"/>{app}</Shape>',
-        f'      <Shape><Box size="{t2*2:.3f} {s*2:.3f} {t2*2:.3f}"/>{app}</Shape>',
-        f'      <Shape><Box size="{t2*2:.3f} {t2*2:.3f} {s*2:.3f}"/>{app}</Shape>',
-        f'    </Transform>',
-    ]
-    return "\n".join(lines) + "\n"
+    return (f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>\n'
+            f'      <Group>\n'
+            f'        <Shape><Box size="{L:.3f} {w:.3f} {w:.3f}"/>{mat_str}</Shape>\n'
+            f'        <Shape><Box size="{w:.3f} {L:.3f} {w:.3f}"/>{mat_str}</Shape>\n'
+            f'        <Shape><Box size="{w:.3f} {w:.3f} {L:.3f}"/>{mat_str}</Shape>\n'
+            f'      </Group>\n'
+            f'    </Transform>\n')
 
 
 def build_crescent_xml(r, g, b, x, y, z, size, rotation, transparency):
-    """Crescent via IndexedFaceSet arc subtraction approximation."""
-    steps = 20
-    outer_r, inner_r = size, size * 0.65
-    offset = size * 0.25
-    pts = []
-    # outer arc
-    for i in range(steps + 1):
-        a = math.pi * i / steps
-        pts.append(f"{outer_r*math.cos(a):.3f} {outer_r*math.sin(a):.3f} 0")
-    # inner arc (shifted)
-    for i in range(steps + 1):
-        a = math.pi * i / steps
-        pts.append(f"{inner_r*math.cos(a)+offset:.3f} {inner_r*math.sin(a):.3f} 0")
-    # Build faces connecting outer and inner arcs
-    idxs = []
-    n = steps + 1
+    """Solid crescent: extruded 2D crescent shape with front/back faces and sides."""
+    steps    = 28
+    outer_r  = size
+    inner_r  = size * 0.62
+    offset_x = size * 0.30
+    depth    = size * 0.25   # extrusion depth
+    mat_str  = _mat(r, g, b, transparency)
+    rot_str  = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
+
+    # Build the 2D crescent outline (full circle outer, partial-offset inner)
+    outer = []
     for i in range(steps):
-        idxs.append(f"{i} {i+1} {n+i+1} {n+i} -1")
+        a = 2 * math.pi * i / steps
+        outer.append((outer_r * math.cos(a), outer_r * math.sin(a)))
+
+    inner = []
+    for i in range(steps):
+        a = 2 * math.pi * i / steps
+        inner.append((inner_r * math.cos(a) + offset_x, inner_r * math.sin(a)))
+
+    # Extrude: front face z=+depth/2, back face z=-depth/2
+    pts = []
+    # front outer (0..steps-1), front inner (steps..2*steps-1)
+    for ox, oy in outer:
+        pts.append((ox, oy,  depth/2))
+    for ix, iy in inner:
+        pts.append((ix, iy,  depth/2))
+    # back outer (2*steps..3*steps-1), back inner (3*steps..4*steps-1)
+    for ox, oy in outer:
+        pts.append((ox, oy, -depth/2))
+    for ix, iy in inner:
+        pts.append((ix, iy, -depth/2))
+
+    s = steps
+    idxs = []
+
+    # Front face annular ring (outer CCW - inner CW = solid ring)
+    for i in range(s):
+        n = (i + 1) % s
+        idxs.append(f"{i} {n} {s+n} {s+i} -1")
+
+    # Back face (reversed winding)
+    for i in range(s):
+        n = (i + 1) % s
+        idxs.append(f"{2*s+i} {3*s+i} {3*s+n} {2*s+n} -1")
+
+    # Outer side wall
+    for i in range(s):
+        n = (i + 1) % s
+        idxs.append(f"{i} {2*s+i} {2*s+n} {n} -1")
+
+    # Inner side wall
+    for i in range(s):
+        n = (i + 1) % s
+        idxs.append(f"{s+i} {s+n} {3*s+n} {3*s+i} -1")
+
+    pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts)
     idx_str = " ".join(idxs)
-    pts_str = " ".join(pts)
-    rot_str = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
-    geo = (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false">'
-           f'<Coordinate point="{pts_str}"/></IndexedFaceSet>')
-    lines = [
-        f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>',
-        f'      <Shape>{geo}',
-        f'        <Appearance><Material diffuseColor="{r:.3f} {g:.3f} {b:.3f}" specularColor="0.4 0.4 0.4" shininess="0.6" transparency="{transparency:.2f}"/></Appearance>',
-        f'      </Shape>',
-        f'    </Transform>',
-    ]
-    return "\n".join(lines) + "\n"
+    geo = _ifs(pts_str, idx_str, mat_str, smooth=False)
+    return (f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>\n'
+            f'      <Shape>{geo}{mat_str}</Shape>\n'
+            f'    </Transform>\n')
 
 
 def build_torusknot_xml(r, g, b, x, y, z, size, rotation, transparency):
-    """Torus knot (3,2) as a line set."""
-    steps = 200
-    p, q = 3, 2
-    R, r2 = size, size * 0.3
-    pts = []
-    for i in range(steps + 1):
-        t2 = 2 * math.pi * i / steps
-        px = (R + r2 * math.cos(q * t2)) * math.cos(p * t2)
-        py = (R + r2 * math.cos(q * t2)) * math.sin(p * t2)
-        pz = r2 * math.sin(q * t2)
-        pts.append(f"{px:.3f} {py:.3f} {pz:.3f}")
-    idxs = " ".join(f"{i} {i+1} -1" for i in range(steps))
+    """Solid torus knot (p=2,q=3): tube mesh swept along the knot path."""
+    path_steps = 120   # knot path resolution
+    tube_steps = 12    # tube cross-section resolution
+    p, q = 2, 3
+    R    = size * 0.7   # major radius
+    r2   = size * 0.28  # knot tube radius
+    tube_r = size * 0.10  # cross-section radius
+
+    mat_str = _mat(r, g, b, transparency)
     rot_str = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
-    geo = (f'<IndexedLineSet coordIndex="{idxs}">'
-           f'<Coordinate point="{" ".join(pts)}"/>'
-           f'<ColorRGBA color=""/>'
-           f'</IndexedLineSet>')
-    lines = [
-        f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>',
-        f'      <Shape>',
-        f'        <IndexedLineSet coordIndex="{idxs}">',
-        f'          <Coordinate point="{" ".join(pts)}"/>',
-        f'        </IndexedLineSet>',
-        f'        <Appearance><Material emissiveColor="{r:.3f} {g:.3f} {b:.3f}"/></Appearance>',
-        f'      </Shape>',
-        f'    </Transform>',
-    ]
-    return "\n".join(lines) + "\n"
+
+    # Compute path points and Frenet frames
+    def knot_pt(t):
+        px = (R + r2 * math.cos(q * t)) * math.cos(p * t)
+        py = (R + r2 * math.cos(q * t)) * math.sin(p * t)
+        pz = r2 * math.sin(q * t)
+        return (px, py, pz)
+
+    path = [knot_pt(2 * math.pi * i / path_steps) for i in range(path_steps)]
+
+    def sub(a, b_): return (a[0]-b_[0], a[1]-b_[1], a[2]-b_[2])
+    def add(a, b_): return (a[0]+b_[0], a[1]+b_[1], a[2]+b_[2])
+    def scale(a, s): return (a[0]*s, a[1]*s, a[2]*s)
+    def norm(v):
+        L = math.sqrt(sum(c*c for c in v))
+        return (v[0]/L, v[1]/L, v[2]/L) if L > 1e-9 else (1,0,0)
+    def cross(a, b_): return (a[1]*b_[2]-a[2]*b_[1], a[2]*b_[0]-a[0]*b_[2], a[0]*b_[1]-a[1]*b_[0])
+
+    # Tangents
+    tangents = [norm(sub(path[(i+1)%path_steps], path[(i-1)%path_steps]))
+                for i in range(path_steps)]
+
+    # Parallel transport normals
+    normals = [None] * path_steps
+    normals[0] = norm(cross(tangents[0], (0,1,0)) if abs(tangents[0][1]) < 0.9
+                      else cross(tangents[0], (1,0,0)))
+    for i in range(1, path_steps):
+        b_vec = cross(tangents[i-1], tangents[i])
+        if math.sqrt(sum(c*c for c in b_vec)) < 1e-9:
+            normals[i] = normals[i-1]
+        else:
+            axis = norm(b_vec)
+            cos_a = max(-1, min(1, sum(tangents[i-1][k]*tangents[i][k] for k in range(3))))
+            sin_a = math.sqrt(max(0, 1 - cos_a*cos_a))
+            n = normals[i-1]
+            normals[i] = norm(add(add(scale(n, cos_a),
+                                      scale(cross(axis, n), sin_a)),
+                                  scale(axis, sum(axis[k]*n[k] for k in range(3))*(1-cos_a))))
+
+    # Generate tube vertices
+    pts = []
+    for i in range(path_steps):
+        T = tangents[i]
+        N = normals[i]
+        B = norm(cross(T, N))
+        cx, cy, cz = path[i]
+        for j in range(tube_steps):
+            ang = 2 * math.pi * j / tube_steps
+            dx = tube_r * (math.cos(ang) * N[0] + math.sin(ang) * B[0])
+            dy = tube_r * (math.cos(ang) * N[1] + math.sin(ang) * B[1])
+            dz = tube_r * (math.cos(ang) * N[2] + math.sin(ang) * B[2])
+            pts.append((cx+dx, cy+dy, cz+dz))
+
+    # Generate faces
+    idxs = []
+    for i in range(path_steps):
+        ni = (i + 1) % path_steps
+        for j in range(tube_steps):
+            nj = (j + 1) % tube_steps
+            a_ = i  * tube_steps + j
+            b_ = i  * tube_steps + nj
+            c_ = ni * tube_steps + nj
+            d_ = ni * tube_steps + j
+            idxs.append(f"{a_} {b_} {c_} {d_} -1")
+
+    pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts)
+    idx_str = " ".join(idxs)
+    geo = _ifs(pts_str, idx_str, mat_str, smooth=True)
+    return (f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>\n'
+            f'      <Shape>{geo}{mat_str}</Shape>\n'
+            f'    </Transform>\n')
 
 
 def build_animation_xml(anim_type, shape_id=None):
@@ -749,7 +935,7 @@ def build_shape_xml(shape, color, position, size, rotation=None, transparency=0.
                 cc = ((i+1) % steps) * steps + (j+1) % steps
                 dd = ((i+1) % steps) * steps + j
                 idxs.append(f"{aa} {bb} {cc} {dd} -1")
-        geo = (f'<IndexedFaceSet coordIndex="{" ".join(idxs)}" solid="false">'
+        geo = (f'<IndexedFaceSet coordIndex="{" ".join(idxs)}" solid="false" creaseAngle="1.5">'
                f'<Coordinate point="{" ".join(pts)}"/></IndexedFaceSet>')
     elif shape == "tetrahedron":
         s = size
@@ -776,59 +962,162 @@ def build_shape_xml(shape, color, position, size, rotation=None, transparency=0.
         geo = (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false" creaseAngle="0.5">'
                f'<Coordinate point="{" ".join(verts)}"/></IndexedFaceSet>')
     elif shape == "star":
-        pts = []
-        outer_r, inner_r = size, size * 0.4
-        points = 5
-        for i in range(points * 2):
-            angle = math.pi / points * i - math.pi / 2
+        # Solid extruded 5-pointed star
+        outer_r, inner_r = size, size * 0.42
+        depth = size * 0.28
+        npts  = 5
+        # 2D star outline (10 vertices alternating outer/inner)
+        outline = []
+        for i in range(npts * 2):
+            ang = math.pi / npts * i - math.pi / 2
             rad = outer_r if i % 2 == 0 else inner_r
-            pts.append(f"{math.cos(angle)*rad:.3f} 0 {math.sin(angle)*rad:.3f}")
-        center_idx = points * 2
-        pts.append("0 0 0")
-        idxs = [f"{center_idx} {i} {(i+1) % (points*2)} -1" for i in range(points * 2)]
-        geo = (f'<IndexedFaceSet coordIndex="{" ".join(idxs)}" solid="false">'
-               f'<Coordinate point="{" ".join(pts)}"/></IndexedFaceSet>')
-    elif shape == "arrow":
-        s = size
-        shaft_w, head_w = s * 0.2, s * 0.5
-        shaft_l, head_l = s * 1.2, s * 0.8
-        pts = [f"-{shaft_w:.3f} 0 0", f"{shaft_w:.3f} 0 0",
-               f"{shaft_w:.3f} 0 {-shaft_l:.3f}", f"-{shaft_w:.3f} 0 {-shaft_l:.3f}",
-               f"-{head_w:.3f} 0 {-shaft_l:.3f}", f"0 0 {-(shaft_l+head_l):.3f}",
-               f"{head_w:.3f} 0 {-shaft_l:.3f}"]
-        geo = (f'<IndexedFaceSet coordIndex="0 1 2 3 -1 4 5 6 -1" solid="false">'
-               f'<Coordinate point="{" ".join(pts)}"/></IndexedFaceSet>')
-    elif shape == "helix":
-        turns, steps_per_turn = 3, 24
-        total = turns * steps_per_turn
-        radius, pitch = size * 0.8, size * 0.5
+            outline.append((math.cos(ang) * rad, math.sin(ang) * rad))
+        n = len(outline)
         pts = []
+        # front face (z=+depth/2)
+        for ox, oy in outline:
+            pts.append((ox, oy,  depth/2))
+        pts.append((0, 0,  depth/2))    # front center  idx=n
+        # back face (z=-depth/2)
+        for ox, oy in outline:
+            pts.append((ox, oy, -depth/2))
+        pts.append((0, 0, -depth/2))   # back center   idx=2n+1
+        idxs = []
+        # front triangles
+        for i in range(n):
+            idxs.append(f"{n} {i} {(i+1)%n} -1")
+        # back triangles (reversed)
+        for i in range(n):
+            idxs.append(f"{2*n+1} {n+1+(i+1)%n} {n+1+i} -1")
+        # side quads
+        for i in range(n):
+            ni = (i+1) % n
+            idxs.append(f"{i} {n+1+i} {n+1+ni} {ni} -1")
+        pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts)
+        idx_str = " ".join(idxs)
+        geo = (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false" creaseAngle="0">'
+               f'<Coordinate point="{pts_str}"/></IndexedFaceSet>')
+    elif shape == "arrow":
+        # Full 3D arrow: square-section shaft + pyramid head pointing up (+Y)
+        s = size
+        sw = s * 0.18   # shaft half-width
+        sh = s * 1.1    # shaft height (from 0 to sh)
+        hw = s * 0.45   # head base half-width
+        hh = s * 0.8    # head height
+        # Shaft box verts (8)
+        shaft = [
+            (-sw, 0,  -sw), ( sw, 0,  -sw), ( sw, 0,   sw), (-sw, 0,   sw),   # 0-3 bottom
+            (-sw, sh, -sw), ( sw, sh, -sw), ( sw, sh,  sw), (-sw, sh,  sw),   # 4-7 top
+        ]
+        # Arrowhead base verts (4) + tip (1)
+        head_base_y = sh
+        head = [
+            (-hw, head_base_y, -hw), ( hw, head_base_y, -hw),  # 8,9
+            ( hw, head_base_y,  hw), (-hw, head_base_y,  hw),  # 10,11
+        ]
+        tip = (0, sh + hh, 0)  # 12
+        pts = shaft + head + [tip]
+        idxs = [
+            # Shaft faces
+            "0 4 5 1 -1",   # front  (-z)
+            "1 5 6 2 -1",   # right  (+x)
+            "2 6 7 3 -1",   # back   (+z)
+            "3 7 4 0 -1",   # left   (-x)
+            "0 1 2 3 -1",   # bottom
+            # No top face on shaft (hidden inside head base)
+            # Head base (4 triangles from center implied, do 2 tris)
+            "8 9 10 11 -1",
+            # Head sides
+            "12 8 9 -1", "12 9 10 -1", "12 10 11 -1", "12 11 8 -1",
+        ]
+        pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts)
+        idx_str = " ".join(idxs)
+        geo = (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false" creaseAngle="0.3">'
+               f'<Coordinate point="{pts_str}"/></IndexedFaceSet>')
+    elif shape == "helix":
+        # Solid tube helix using swept circle cross-sections
+        turns, path_segs, tube_segs = 3, 80, 10
+        total  = turns * path_segs
+        radius = size * 0.75
+        pitch  = size * 0.55
+        tube_r = size * 0.10
+
+        # Path points
+        path_pts = []
         for i in range(total + 1):
-            angle = 2 * math.pi * i / steps_per_turn
-            px = radius * math.cos(angle)
-            py = pitch * i / steps_per_turn - (pitch * turns / 2)
-            pz = radius * math.sin(angle)
-            pts.append(f"{px:.3f} {py:.3f} {pz:.3f}")
-        idxs = " ".join(f"{i} {i+1} -1" for i in range(total))
-        geo = (f'<IndexedLineSet coordIndex="{idxs}">'
-               f'<Coordinate point="{" ".join(pts)}"/></IndexedLineSet>')
+            ang = 2 * math.pi * i / path_segs
+            px  = radius * math.cos(ang)
+            py  = pitch * i / path_segs - (pitch * turns / 2)
+            pz  = radius * math.sin(ang)
+            path_pts.append((px, py, pz))
+
+        def v3sub(a, b_): return (a[0]-b_[0], a[1]-b_[1], a[2]-b_[2])
+        def v3norm(v):
+            L = math.sqrt(v[0]**2+v[1]**2+v[2]**2)
+            return (v[0]/L, v[1]/L, v[2]/L) if L>1e-9 else (1,0,0)
+        def v3cross(a, b_):
+            return (a[1]*b_[2]-a[2]*b_[1], a[2]*b_[0]-a[0]*b_[2], a[0]*b_[1]-a[1]*b_[0])
+
+        pts_list = []
+        idxs_list = []
+        for i in range(total + 1):
+            if i < total:
+                T = v3norm(v3sub(path_pts[i+1], path_pts[i]))
+            else:
+                T = v3norm(v3sub(path_pts[i], path_pts[i-1]))
+            # Build frame
+            up = (0, 1, 0) if abs(T[1]) < 0.9 else (1, 0, 0)
+            N = v3norm(v3cross(T, up))
+            B = v3norm(v3cross(T, N))
+            cx, cy, cz = path_pts[i]
+            for j in range(tube_segs):
+                ang = 2 * math.pi * j / tube_segs
+                dx = tube_r * (math.cos(ang)*N[0] + math.sin(ang)*B[0])
+                dy = tube_r * (math.cos(ang)*N[1] + math.sin(ang)*B[1])
+                dz = tube_r * (math.cos(ang)*N[2] + math.sin(ang)*B[2])
+                pts_list.append((cx+dx, cy+dy, cz+dz))
+
+        for i in range(total):
+            for j in range(tube_segs):
+                nj = (j+1) % tube_segs
+                a_ = i*tube_segs+j; b_ = i*tube_segs+nj
+                c_ = (i+1)*tube_segs+nj; d_ = (i+1)*tube_segs+j
+                idxs_list.append(f"{a_} {b_} {c_} {d_} -1")
+
+        pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts_list)
+        idx_str = " ".join(idxs_list)
+        geo = (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false" creaseAngle="1.5">'
+               f'<Coordinate point="{pts_str}"/></IndexedFaceSet>')
     elif shape == "plane":
+        # Subdivided plane with double-sided normals
         s = size * 2
-        geo = (f'<IndexedFaceSet coordIndex="0 1 2 3 -1" solid="false">'
-               f'<Coordinate point="-{s:.3f} 0 -{s:.3f}  {s:.3f} 0 -{s:.3f}  {s:.3f} 0 {s:.3f}  -{s:.3f} 0 {s:.3f}"/>'
-               f'</IndexedFaceSet>')
+        divs = 4
+        pts_list = []
+        idxs_list = []
+        step = s * 2 / divs
+        for row in range(divs + 1):
+            for col in range(divs + 1):
+                pts_list.append((-s + col*step, 0, -s + row*step))
+        for row in range(divs):
+            for col in range(divs):
+                a_ = row*(divs+1)+col
+                b_ = a_+1
+                c_ = (row+1)*(divs+1)+col+1
+                d_ = (row+1)*(divs+1)+col
+                idxs_list.append(f"{a_} {b_} {c_} {d_} -1")
+                idxs_list.append(f"{d_} {c_} {b_} {a_} -1")   # back face
+        pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts_list)
+        idx_str = " ".join(idxs_list)
+        geo = (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false" creaseAngle="0">'
+               f'<Coordinate point="{pts_str}"/></IndexedFaceSet>')
     elif shape == "ellipsoid":
         geo = f'<Sphere radius="{size:.3f}"/>'
+        mat_str = _mat(r, g, b, transparency)
         rot_str = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
         def_str = f' DEF="obj_{obj_id}"' if obj_id else ""
-        lines = [
-            f'    <Transform{def_str} translation="{x:.3f} {y:.3f} {z:.3f}" scale="1.0 0.6 1.4"{rot_str}>',
-            f'      <Shape>{geo}',
-            f'        <Appearance><Material diffuseColor="{r:.3f} {g:.3f} {b:.3f}" specularColor="0.4 0.4 0.4" shininess="0.6" transparency="{transparency:.2f}"/></Appearance>',
-            f'      </Shape>',
-            f'    </Transform>',
-        ]
-        return "\n".join(lines) + "\n"
+        return (f'    <Transform{def_str} translation="{x:.3f} {y:.3f} {z:.3f}" scale="1.0 0.6 1.4"{rot_str}>\n'
+                f'      <Shape>{geo}{mat_str}</Shape>\n'
+                f'    </Transform>\n')
     else:
         s = size * 2
         geo = f'<Box size="{s:.3f} {s:.3f} {s:.3f}"/>'
@@ -836,13 +1125,12 @@ def build_shape_xml(shape, color, position, size, rotation=None, transparency=0.
     rot_str = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
     def_str = f' DEF="obj_{obj_id}"' if obj_id else ""
 
+    mat_str = _mat(r, g, b, transparency)
     lines = [
         f'    <Transform{def_str} translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>',
         f'      <Shape>',
         f'        {geo}',
-        f'        <Appearance>',
-        f'          <Material diffuseColor="{r:.3f} {g:.3f} {b:.3f}" specularColor="0.4 0.4 0.4" shininess="0.6" transparency="{transparency:.2f}"/>',
-        f'        </Appearance>',
+        f'        {mat_str}',
         f'      </Shape>',
         f'    </Transform>',
     ]
