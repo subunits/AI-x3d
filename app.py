@@ -364,7 +364,7 @@ def parse_color(t: str):
         vals = [float(rgb_match.group(i)) for i in range(1, 4)]
         if max(vals) > 1.0:
             vals = [v/255 for v in vals]
-        return tuple(vals)
+        return tuple(min(1.0, max(0.0, v)) for v in vals)
 
     for name, rgb in COLORS.items():
         if re.search(r'\b' + re.escape(name) + r'\b', t):
@@ -375,7 +375,7 @@ def parse_color(t: str):
 def parse_size(t: str):
     num_match = re.search(r'(?:size|radius|scale|width|height|length)\s+([\d.]+)', t)
     if num_match:
-        return min(float(num_match.group(1)), 5.0)
+        return max(0.05, min(float(num_match.group(1)), 5.0))
     for word, s in SIZES.items():
         if re.search(r'\b' + re.escape(word) + r'\b', t):
             return s
@@ -547,6 +547,10 @@ def parse_prompt(text: str) -> dict:
     else:
         msg = f"Added {color_name} {shape} (size={size:.2f}) at {position}."
 
+    # If we defaulted to box but no box-word was in the prompt, flag as ambiguous
+    box_words = ("box","cube","block","brick","square","rectangle","crate","chest","slab","tile")
+    ambiguous = (shape == "box" and not any(w in t for w in box_words)
+                 and not any(verb in t for verb in ("make a scene","make something")))
     return {
         "action":       "add",
         "shape":        shape,
@@ -559,6 +563,7 @@ def parse_prompt(text: str) -> dict:
         "count":        count,
         "arrangement":  arrangement,
         "message":      msg,
+        "ambiguous":    ambiguous,
     }
 
 
@@ -648,7 +653,7 @@ def _build_torus(size):
 def _tube_sweep(path, tube_r, closed=True):
     """Sweep a circle of radius tube_r along path (list of (x,y,z)).
     Returns (pts, idxs). path may be open or closed."""
-    T_segs = 12   # tube cross-section segments
+    T_segs = 8    # tube cross-section segments
     n = len(path)
 
     def v3(a,b): return (a[0]-b[0],a[1]-b[1],a[2]-b[2])
@@ -942,7 +947,7 @@ def _build_crescent(s):
 # ── helix (swept tube) ───────────────────────────────────────────────────────
 
 def _build_helix_path(s):
-    turns, segs = 3, 72
+    turns, segs = 3, 48
     R, pitch = s*0.70, s*0.52
     total = turns*segs
     return [(R*math.cos(2*math.pi*i/segs),
@@ -953,7 +958,7 @@ def _build_helix_path(s):
 # ── torus knot (swept tube) ──────────────────────────────────────────────────
 
 def _build_torusknot_path(s):
-    segs = 160
+    segs = 96
     p_, q_ = 2, 3
     R, r = s*0.65, s*0.24
     path = []
@@ -1111,23 +1116,25 @@ def build_viewpoint_xml(view: str) -> str:
 
 
 def rebuild_scene_with_header(sky_str: str, lights_xml: str) -> str:
-    """Re-read scene, replace Background and lights, keep objects."""
+    """Re-read scene, replace Background and lights, keep objects and viewpoints."""
     ensure_scene_file()
     with open(SCENE_FILE, "r", encoding="utf-8") as f:
         content = f.read()
-    # Extract everything between <Scene> and </Scene>
     scene_match = re.search(r'<Scene>(.*?)</Scene>', content, re.DOTALL)
     if not scene_match:
         return DEFAULT_X3D
     inner = scene_match.group(1)
-    # Remove old background, nav, lights
+    # Extract existing viewpoint(s) before stripping header nodes
+    existing_vp = re.findall(r'<Viewpoint[^/]*/>', inner)
+    # Remove header nodes (background, nav, lights, viewpoints)
     inner = re.sub(r'\s*<Background[^/]*/>', '', inner)
     inner = re.sub(r'\s*<NavigationInfo[^/]*/>', '', inner)
     inner = re.sub(r'\s*<DirectionalLight[^/]*/>', '', inner)
     inner = re.sub(r'\s*<Viewpoint[^/]*/>', '', inner)
+    vp_xml = ("    " + "\n    ".join(existing_vp) + "\n") if existing_vp else ""
     new_header = (f'    <Background skyColor="{sky_str}"/>\n'
                   f'    <NavigationInfo type="EXAMINE ANY"/>\n'
-                  + lights_xml)
+                  + lights_xml + vp_xml)
     return (f'<?xml version="1.0" encoding="UTF-8"?>\n'
             f'<!DOCTYPE X3D PUBLIC "http://www.web3d.org/specifications/x3d-3.3.dtd" "http://www.web3d.org/specifications/x3d-3.3.dtd">\n'
             f'<X3D profile="Immersive" version="3.3">\n'
@@ -1250,7 +1257,7 @@ async def run_agent(req: PromptRequest):
                 with open(SCENE_FILE, "w") as f:
                     f.write(data)
                 SCENE_OBJECTS.clear()
-                SCENE_OBJECTS.append({"shape": "archive", "color_name": key, "position": "(0,0,0)"})
+                SCENE_OBJECTS.append({"shape": "archive", "color_name": key, "position": "(0,0,0)", "size": 1.0})
                 return {"status": "success", "message": f"Loaded archive scene: {key}"}
             except Exception as e:
                 return {"status": "error", "message": f"Couldn't fetch archive scene: {e}"}
@@ -1268,6 +1275,8 @@ async def run_agent(req: PromptRequest):
             ensure_scene_file()
             with open(SCENE_FILE, "r") as f:
                 content = f.read()
+            if content.count("SpotLight") >= 3:
+                return {"status": "ok", "message": "Already have 3 spotlights — say 'clear' to reset lighting."}
             spot = '    <SpotLight location="0 5 0" direction="0 -1 0" intensity="1.5" cutOffAngle="0.5" color="1 1 0.9"/>\n'
             updated = content.replace("</Scene>", spot + "  </Scene>")
             with open(SCENE_FILE, "w") as f:
@@ -1320,6 +1329,8 @@ async def run_agent(req: PromptRequest):
 
         # ── Add shape(s) ──────────────────────────────────────────────────────
         if result["action"] == "add":
+            if result.get("ambiguous"):
+                return {"status": "ok", "message": "Not sure what shape you want — try: 'add a red sphere to the left', 'place a gold torus above', or check the Chips tab."}
             count       = result.get("count", 1)
             arrangement = result.get("arrangement")
             shape       = result["shape"]
@@ -1334,6 +1345,12 @@ async def run_agent(req: PromptRequest):
             ensure_scene_file()
             with open(SCENE_FILE, "r") as f:
                 content = f.read()
+            # Validate XML; reset to default if corrupt
+            try:
+                import xml.etree.ElementTree as _ET
+                _ET.fromstring(content)
+            except Exception:
+                content = DEFAULT_X3D
             if "</Scene>" not in content:
                 content = DEFAULT_X3D
 
@@ -1377,7 +1394,7 @@ HTML = """<!DOCTYPE html>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>X3D Agent</title>
-  <script src="https://create3000.github.io/code/x_ite/latest/x_ite.min.js"></script>
+  <script src="https://create3000.github.io/code/x_ite/11.3/x_ite.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
