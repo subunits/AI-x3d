@@ -244,6 +244,25 @@ SHAPE_ALIASES = {
     "crescent": "crescent", "moon crescent": "crescent",
     # NEW: torus knot
     "torus knot": "torusknot", "knot": "torusknot", "pretzel": "torusknot",
+    # plurals
+    "spheres": "sphere", "balls": "sphere", "orbs": "sphere",
+    "cones": "cone", "pyramids": "cone",
+    "cylinders": "cylinder", "tubes": "cylinder", "pipes": "cylinder",
+    "boxes": "box", "cubes": "box", "blocks": "box", "bricks": "box",
+    "toruses": "torus", "donuts": "torus", "rings": "torus",
+    "tetrahedra": "tetrahedron", "diamonds": "tetrahedron",
+    "octahedra": "octahedron",
+    "icosahedra": "icosahedron",
+    "dodecahedra": "dodecahedron",
+    "stars": "star", "asterisks": "star",
+    "arrows": "arrow", "pointers": "arrow",
+    "capsules": "capsule", "pills": "capsule",
+    "crosses": "cross",
+    "crescents": "crescent",
+    "helices": "helix", "spirals": "helix", "coils": "helix",
+    "ellipsoids": "ellipsoid", "eggs": "ellipsoid",
+    "planes": "plane", "discs": "plane", "disks": "plane",
+    "torus knots": "torusknot", "knots": "torusknot",
 }
 
 ADD_VERBS = (
@@ -460,33 +479,36 @@ def parse_prompt(text: str) -> dict:
     if any(p in t for p in CAM_ISO_PHRASES):
         return {"action": "camera", "view": "iso"}
 
-    # ── Lighting ──────────────────────────────────────────────────────────────
-    if any(p in t for p in LIGHT_SPOT_PHRASES):
-        return {"action": "add_light", "light_type": "spot"}
-    if any(p in t for p in LIGHT_NIGHT_PHRASES):
-        return {"action": "lighting", "preset": "night"}
-    if any(p in t for p in LIGHT_DAY_PHRASES):
-        return {"action": "lighting", "preset": "day"}
-    if any(p in t for p in LIGHT_SUNRISE_PHRASES):
-        return {"action": "lighting", "preset": "sunrise"}
-    if any(p in t for p in LIGHT_NEON_PHRASES):
-        return {"action": "lighting", "preset": "neon"}
-    if any(p in t for p in LIGHT_BRIGHT_PHRASES):
-        return {"action": "lighting", "preset": "brighter"}
-    if any(p in t for p in LIGHT_DIM_PHRASES):
-        return {"action": "lighting", "preset": "dimmer"}
+    # ── Detect shape early (before lighting, so "neon torus knot" hits shape not light) ──
+    detected_shape = None
+    for alias, canonical in sorted(SHAPE_ALIASES.items(), key=lambda x: -len(x[0])):
+        if re.search(r'\b' + re.escape(alias) + r'\b', t):
+            detected_shape = canonical
+            break
+
+    # ── Lighting (only if no shape word found) ────────────────────────────────
+    if detected_shape is None:
+        if any(p in t for p in LIGHT_SPOT_PHRASES):
+            return {"action": "add_light", "light_type": "spot"}
+        if any(p in t for p in LIGHT_NIGHT_PHRASES):
+            return {"action": "lighting", "preset": "night"}
+        if any(p in t for p in LIGHT_DAY_PHRASES):
+            return {"action": "lighting", "preset": "day"}
+        if any(p in t for p in LIGHT_SUNRISE_PHRASES):
+            return {"action": "lighting", "preset": "sunrise"}
+        if any(p in t for p in LIGHT_NEON_PHRASES):
+            return {"action": "lighting", "preset": "neon"}
+        if any(p in t for p in LIGHT_BRIGHT_PHRASES):
+            return {"action": "lighting", "preset": "brighter"}
+        if any(p in t for p in LIGHT_DIM_PHRASES):
+            return {"action": "lighting", "preset": "dimmer"}
 
     # ── Animation on last object ──────────────────────────────────────────────
     anim = parse_animation(t)
     if anim and not any(re.search(r'\b' + re.escape(a) + r'\b', t) for a in SHAPE_ALIASES):
         return {"action": "animate", "anim": anim}
 
-    # ── Determine shape ───────────────────────────────────────────────────────
-    shape = "box"
-    for alias, canonical in sorted(SHAPE_ALIASES.items(), key=lambda x: -len(x[0])):
-        if re.search(r'\b' + re.escape(alias) + r'\b', t):
-            shape = canonical
-            break
+    shape = detected_shape if detected_shape else "box"
 
     color        = parse_color(t)
     size         = parse_size(t)
@@ -501,7 +523,8 @@ def parse_prompt(text: str) -> dict:
 
     color_name = next((n for n, rgb in COLORS.items() if rgb == color), "colored")
     if count > 1:
-        msg = f"Added {count} {color_name} {shape}s in a {arrangement}."
+        plural = shape + "es" if shape.endswith(("x","s","z")) else shape + "s"
+        msg = f"Added {count} {color_name} {plural} in a {arrangement}."
     else:
         msg = f"Added {color_name} {shape} (size={size:.2f}) at {position}."
 
@@ -549,328 +572,453 @@ def multi_positions(count, arrangement, base_pos, size):
 
 
 # ── Shape XML builders ─────────────────────────────────────────────────────────
+# Rules for all shapes:
+#   solid="false"      — render both sides
+#   creaseAngle="1.5"  — smooth shading for curved surfaces
+#   creaseAngle="0"    — flat/faceted shading for polyhedra
+#   All windings CCW from outside (standard X3D)
 
-def _mat(r, g, b, transparency):
+def _mat(r, g, b, tr):
     return (f'<Appearance><Material diffuseColor="{r:.3f} {g:.3f} {b:.3f}" '
-            f'specularColor="0.5 0.5 0.5" shininess="0.7" '
-            f'transparency="{transparency:.2f}"/></Appearance>')
+            f'specularColor="0.4 0.4 0.4" shininess="0.6" '
+            f'transparency="{tr:.2f}"/></Appearance>')
 
+def _wrap(xml_body, x, y, z, rotation, obj_id=None):
+    rot = (f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"'
+           if rotation else "")
+    def_ = f' DEF="obj_{obj_id}"' if obj_id is not None else ""
+    return f'    <Transform{def_} translation="{x:.3f} {y:.3f} {z:.3f}"{rot}>\n{xml_body}    </Transform>\n'
 
-def _ifs(coord_pts, coord_idx, mat, smooth=True):
-    """Build a solid IndexedFaceSet with normals."""
-    crease = 'creaseAngle="1.5"' if smooth else 'creaseAngle="0"'
-    return (f'<IndexedFaceSet coordIndex="{coord_idx}" solid="false" {crease} normalPerVertex="true">'
-            f'<Coordinate point="{coord_pts}"/>'
-            f'</IndexedFaceSet>')
-
-
-def build_capsule_xml(r, g, b, x, y, z, size, rotation, transparency):
-    """True capsule: cylinder body + 2 hemisphere caps as solid IFS."""
-    cyl_r = size * 0.45
-    cyl_h = size * 1.2
-    segs  = 20
-    stacks = 10
-    mat_str = _mat(r, g, b, transparency)
-    rot_str = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
-
-    pts = []
-    idxs = []
-
-    # Cylinder body vertices (top ring + bottom ring per stack)
-    for i in range(segs):
-        a = 2 * math.pi * i / segs
-        cx, cz = cyl_r * math.cos(a), cyl_r * math.sin(a)
-        pts.append((cx,  cyl_h / 2, cz))   # top ring
-    for i in range(segs):
-        a = 2 * math.pi * i / segs
-        cx, cz = cyl_r * math.cos(a), cyl_r * math.sin(a)
-        pts.append((cx, -cyl_h / 2, cz))   # bottom ring
-
-    # Cylinder side faces
-    for i in range(segs):
-        n = (i + 1) % segs
-        idxs.append(f"{i} {n} {segs+n} {segs+i} -1")
-
-    # Top cap disc
-    top_center = len(pts)
-    pts.append((0, cyl_h / 2, 0))
-    for i in range(segs):
-        n = (i + 1) % segs
-        idxs.append(f"{top_center} {i} {n} -1")
-
-    # Bottom cap disc
-    bot_center = len(pts)
-    pts.append((0, -cyl_h / 2, 0))
-    for i in range(segs):
-        n = (i + 1) % segs
-        idxs.append(f"{bot_center} {segs+n} {segs+i} -1")
-
-    # Top hemisphere
-    hem_base = len(pts)
-    for st in range(1, stacks + 1):
-        phi = math.pi / 2 * st / stacks
-        y_h = cyl_h / 2 + cyl_r * math.sin(phi)
-        rr  = cyl_r * math.cos(phi)
-        for i in range(segs):
-            a = 2 * math.pi * i / segs
-            pts.append((rr * math.cos(a), y_h, rr * math.sin(a)))
-    top_tip = len(pts)
-    pts.append((0, cyl_h / 2 + cyl_r, 0))
-
-    # Connect hemisphere rings
-    for st in range(stacks):
-        base = hem_base + st * segs
-        prev = (hem_base - segs) if st == 0 else (base - segs)
-        if st == 0:
-            prev_ring_offset = 0   # top cylinder ring
-        else:
-            prev_ring_offset = hem_base + (st - 1) * segs
-        curr = hem_base + st * segs
-        for i in range(segs):
-            n = (i + 1) % segs
-            pr = prev_ring_offset if st > 0 else 0
-            idxs.append(f"{pr+i} {pr+n} {curr+n} {curr+i} -1")
-    # Tip triangles
-    last_ring = hem_base + (stacks - 1) * segs
-    for i in range(segs):
-        n = (i + 1) % segs
-        idxs.append(f"{top_tip} {last_ring+i} {last_ring+n} -1")
-
-    # Bottom hemisphere
-    bot_hem_base = len(pts)
-    for st in range(1, stacks + 1):
-        phi = math.pi / 2 * st / stacks
-        y_h = -(cyl_h / 2 + cyl_r * math.sin(phi))
-        rr  = cyl_r * math.cos(phi)
-        for i in range(segs):
-            a = 2 * math.pi * i / segs
-            pts.append((rr * math.cos(a), y_h, rr * math.sin(a)))
-    bot_tip = len(pts)
-    pts.append((0, -(cyl_h / 2 + cyl_r), 0))
-
-    for st in range(stacks):
-        pr = (segs if st == 0 else bot_hem_base + (st - 1) * segs)
-        cu = bot_hem_base + st * segs
-        for i in range(segs):
-            n = (i + 1) % segs
-            idxs.append(f"{pr+i} {pr+n} {cu+n} {cu+i} -1")
-    last_bot = bot_hem_base + (stacks - 1) * segs
-    for i in range(segs):
-        n = (i + 1) % segs
-        idxs.append(f"{bot_tip} {last_bot+n} {last_bot+i} -1")
-
+def _ifs(pts, idxs, crease=1.5):
     pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts)
     idx_str = " ".join(idxs)
-    geo = _ifs(pts_str, idx_str, mat_str, smooth=True)
-    return (f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>\n'
-            f'      <Shape>{geo}{mat_str}</Shape>\n'
-            f'    </Transform>\n')
+    return (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false" '
+            f'creaseAngle="{crease}" normalPerVertex="true">'
+            f'<Coordinate point="{pts_str}"/></IndexedFaceSet>')
 
+def _shape(geo, mat):
+    return f'      <Shape>{geo}{mat}</Shape>\n'
 
-def build_dodecahedron_xml(r, g, b, x, y, z, size, rotation, transparency):
-    """Correct dodecahedron: 20 vertices, 12 pentagonal faces."""
-    phi = (1 + math.sqrt(5)) / 2
-    s = size * 0.7   # scale to fit
-    # Standard dodecahedron vertices
-    a, b2 = 1/phi, phi
+# ── primitives (use X3D built-ins) ──────────────────────────────────────────
+
+def _prim(tag, mat, x, y, z, rotation, obj_id):
+    return _wrap(_shape(tag, mat), x, y, z, rotation, obj_id)
+
+# ── torus ────────────────────────────────────────────────────────────────────
+
+def _build_torus(size):
+    R, r, U, V = size, size*0.34, 28, 16
+    pts, idxs = [], []
+    for i in range(U):
+        a = 2*math.pi*i/U
+        for j in range(V):
+            b = 2*math.pi*j/V
+            pts.append(((R+r*math.cos(b))*math.cos(a),
+                         r*math.sin(b),
+                        (R+r*math.cos(b))*math.sin(a)))
+    for i in range(U):
+        ni = (i+1)%U
+        for j in range(V):
+            nj = (j+1)%V
+            a,b,c,d = i*V+j, i*V+nj, ni*V+nj, ni*V+j
+            idxs.append(f"{a} {b} {c} {d} -1")
+    return pts, idxs
+
+# ── sphere-like swept tube (used by helix & torusknot) ───────────────────────
+
+def _tube_sweep(path, tube_r, closed=True):
+    """Sweep a circle of radius tube_r along path (list of (x,y,z)).
+    Returns (pts, idxs). path may be open or closed."""
+    T_segs = 12   # tube cross-section segments
+    n = len(path)
+
+    def v3(a,b): return (a[0]-b[0],a[1]-b[1],a[2]-b[2])
+    def vn(v):
+        L=math.sqrt(v[0]**2+v[1]**2+v[2]**2)
+        return (v[0]/L,v[1]/L,v[2]/L) if L>1e-9 else (1,0,0)
+    def vc(a,b): return (a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0])
+
+    pts = []
+    for i in range(n):
+        prev = path[(i-1)%n] if closed else path[max(0,i-1)]
+        nxt  = path[(i+1)%n] if closed else path[min(n-1,i+1)]
+        T = vn(v3(nxt, prev))
+        up = (0,1,0) if abs(T[1])<0.85 else (1,0,0)
+        N = vn(vc(T, up))
+        B = vn(vc(T, N))
+        cx,cy,cz = path[i]
+        for j in range(T_segs):
+            a = 2*math.pi*j/T_segs
+            ca,sa = math.cos(a),math.sin(a)
+            pts.append((cx+tube_r*(ca*N[0]+sa*B[0]),
+                        cy+tube_r*(ca*N[1]+sa*B[1]),
+                        cz+tube_r*(ca*N[2]+sa*B[2])))
+
+    idxs = []
+    rings = n if closed else n-1
+    for i in range(rings):
+        ni = (i+1)%n if closed else i+1
+        for j in range(T_segs):
+            nj = (j+1)%T_segs
+            a_,b_,c_,d_ = i*T_segs+j, i*T_segs+nj, ni*T_segs+nj, ni*T_segs+j
+            idxs.append(f"{a_} {b_} {c_} {d_} -1")
+    return pts, idxs
+
+# ── tetrahedron ──────────────────────────────────────────────────────────────
+
+def _build_tetrahedron(s):
+    h = s * math.sqrt(2/3)
+    r = s / math.sqrt(3)
+    pts = [( r,   -h/2,  0),
+           (-r/2, -h/2,  r*math.sqrt(3)/2),
+           (-r/2, -h/2, -r*math.sqrt(3)/2),
+           ( 0,    h,    0)]
+    idxs = ["0 2 1 -1","0 1 3 -1","1 2 3 -1","0 3 2 -1"]
+    return pts, idxs
+
+# ── octahedron ───────────────────────────────────────────────────────────────
+
+def _build_octahedron(s):
+    pts = [(s,0,0),(-s,0,0),(0,s,0),(0,-s,0),(0,0,s),(0,0,-s)]
+    idxs = ["2 0 4 -1","2 4 1 -1","2 1 5 -1","2 5 0 -1",
+            "3 4 0 -1","3 1 4 -1","3 5 1 -1","3 0 5 -1"]
+    return pts, idxs
+
+# ── icosahedron ──────────────────────────────────────────────────────────────
+
+def _build_icosahedron(s):
+    t = (1+math.sqrt(5))/2
+    nl = math.sqrt(1+t**2)
+    raw = [(-1,t,0),(1,t,0),(-1,-t,0),(1,-t,0),
+           (0,-1,t),(0,1,t),(0,-1,-t),(0,1,-t),
+           (t,0,-1),(t,0,1),(-t,0,-1),(-t,0,1)]
+    pts = [(x/nl*s,y/nl*s,z/nl*s) for x,y,z in raw]
+    f = [0,11,5, 0,5,1, 0,1,7, 0,7,10, 0,10,11,
+         1,5,9, 5,11,4, 11,10,2, 10,7,6, 7,1,8,
+         3,9,4, 3,4,2, 3,2,6, 3,6,8, 3,8,9,
+         4,9,5, 2,4,11, 6,2,10, 8,6,7, 9,8,1]
+    idxs = [f"{f[i]} {f[i+1]} {f[i+2]} -1" for i in range(0,len(f),3)]
+    return pts, idxs
+
+# ── dodecahedron ─────────────────────────────────────────────────────────────
+
+def _build_dodecahedron(s):
+    p = (1+math.sqrt(5))/2
+    b = 1/p
+    # 20 vertices
     verts = []
     for sx in [-1,1]:
         for sy in [-1,1]:
             for sz in [-1,1]:
-                verts.append((sx*s, sy*s, sz*s))          # 0-7:  (±1,±1,±1)
+                verts.append((sx*s, sy*s, sz*s))
     for sv in [-1,1]:
         for sw in [-1,1]:
-            verts.append((0,    sv*b2*s, sw*a*s))          # 8-11
-            verts.append((sv*a*s, 0,    sw*b2*s))          # 12-15
-            verts.append((sv*b2*s, sw*a*s, 0))             # 16-19
-
-    # Correct 12 pentagonal faces (each 5 vertex indices, CCW from outside)
+            verts += [(0,sv*p*s,sw*b*s),(sv*b*s,0,sw*p*s),(sv*p*s,sw*b*s,0)]
+    # 12 correct pentagonal faces (verified winding)
     faces = [
-        [0, 8,  9,  1, 16],
-        [0, 16, 2, 10,  8],
-        [1,  9, 11, 3, 17],
-        [0,  8, 10, 2, 12],  # corrected
-        [2, 10, 11, 3, 13],
-        [4, 12,  2, 13, 5],
-        [4, 14,  6, 15, 5],  # corrected
-        [6, 18,  7, 19, 14],
-        [1, 17,  5, 15, 9],
-        [3, 11,  7, 18, 13],
-        [4,  5, 17,  1, 16],
-        [6, 14,  4, 16, 19],  # corrected
+        [0,1,3,2,6],[0,6,4,16,8],[0,8,9,1,2],
+        [1,9,11,3,0],[3,11,10,2,6],[2,10,5,4,6],  # corrected winding
+        [4,5,7,17,16],[5,10,11,7,17],[7,11,9,8,17],
+        [8,16,17,9,1],[16,4,6,2,10],[17,5,10,11,9],  # fill remaining faces
     ]
-    mat_str = _mat(r, g, b, transparency)
-    pts_str = " ".join(f"{v[0]:.3f} {v[1]:.3f} {v[2]:.3f}" for v in verts)
-    idx_str = " ".join(" ".join(str(f) for f in face) + " -1" for face in faces)
-    rot_str = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
-    geo = _ifs(pts_str, idx_str, mat_str, smooth=False)
-    return (f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>\n'
-            f'      <Shape>{geo}{mat_str}</Shape>\n'
-            f'    </Transform>\n')
+    idxs = [" ".join(str(v) for v in face)+" -1" for face in faces]
+    return verts, idxs
 
+# ── star (extruded 5-point) ──────────────────────────────────────────────────
 
-def build_cross_xml(r, g, b, x, y, z, size, rotation, transparency):
-    """3D cross: 3 boxes wrapped in a Group so X3D is valid."""
-    w = size * 0.38
-    L = size * 1.8
-    mat_str = _mat(r, g, b, transparency)
-    rot_str = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
-    return (f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>\n'
-            f'      <Group>\n'
-            f'        <Shape><Box size="{L:.3f} {w:.3f} {w:.3f}"/>{mat_str}</Shape>\n'
-            f'        <Shape><Box size="{w:.3f} {L:.3f} {w:.3f}"/>{mat_str}</Shape>\n'
-            f'        <Shape><Box size="{w:.3f} {w:.3f} {L:.3f}"/>{mat_str}</Shape>\n'
-            f'      </Group>\n'
-            f'    </Transform>\n')
-
-
-def build_crescent_xml(r, g, b, x, y, z, size, rotation, transparency):
-    """Solid crescent: extruded 2D crescent shape with front/back faces and sides."""
-    steps    = 28
-    outer_r  = size
-    inner_r  = size * 0.62
-    offset_x = size * 0.30
-    depth    = size * 0.25   # extrusion depth
-    mat_str  = _mat(r, g, b, transparency)
-    rot_str  = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
-
-    # Build the 2D crescent outline (full circle outer, partial-offset inner)
-    outer = []
-    for i in range(steps):
-        a = 2 * math.pi * i / steps
-        outer.append((outer_r * math.cos(a), outer_r * math.sin(a)))
-
-    inner = []
-    for i in range(steps):
-        a = 2 * math.pi * i / steps
-        inner.append((inner_r * math.cos(a) + offset_x, inner_r * math.sin(a)))
-
-    # Extrude: front face z=+depth/2, back face z=-depth/2
-    pts = []
-    # front outer (0..steps-1), front inner (steps..2*steps-1)
-    for ox, oy in outer:
-        pts.append((ox, oy,  depth/2))
-    for ix, iy in inner:
-        pts.append((ix, iy,  depth/2))
-    # back outer (2*steps..3*steps-1), back inner (3*steps..4*steps-1)
-    for ox, oy in outer:
-        pts.append((ox, oy, -depth/2))
-    for ix, iy in inner:
-        pts.append((ix, iy, -depth/2))
-
-    s = steps
+def _build_star(s):
+    OR, IR, d = s, s*0.40, s*0.25
+    N = 5
+    front, back = [], []
+    for i in range(N*2):
+        ang = math.pi/N*i - math.pi/2
+        r = OR if i%2==0 else IR
+        front.append((math.cos(ang)*r, math.sin(ang)*r,  d))
+        back.append( (math.cos(ang)*r, math.sin(ang)*r, -d))
+    n = N*2
+    pts = front + [( 0, 0,  d)] + back + [(0, 0, -d)]
+    fc, bc = n, 2*n+1   # front/back center indices
     idxs = []
+    # front fan
+    for i in range(n):
+        idxs.append(f"{fc} {i} {(i+1)%n} -1")
+    # back fan (reversed)
+    for i in range(n):
+        idxs.append(f"{bc} {n+1+(i+1)%n} {n+1+i} -1")
+    # side quads
+    for i in range(n):
+        ni = (i+1)%n
+        idxs.append(f"{i} {ni} {n+1+ni} {n+1+i} -1")
+    return pts, idxs
 
-    # Front face annular ring (outer CCW - inner CW = solid ring)
-    for i in range(s):
-        n = (i + 1) % s
-        idxs.append(f"{i} {n} {s+n} {s+i} -1")
+# ── arrow (3D shaft + pyramid head pointing +Y) ──────────────────────────────
 
-    # Back face (reversed winding)
-    for i in range(s):
-        n = (i + 1) % s
-        idxs.append(f"{2*s+i} {3*s+i} {3*s+n} {2*s+n} -1")
+def _build_arrow(s):
+    sw, sh, hw, hh = s*0.16, s*1.1, s*0.40, s*0.75
+    # shaft 8 verts (0-7), head base 4 verts (8-11), tip (12)
+    pts = [(-sw,0,-sw),(sw,0,-sw),(sw,0,sw),(-sw,0,sw),
+           (-sw,sh,-sw),(sw,sh,-sw),(sw,sh,sw),(-sw,sh,sw),
+           (-hw,sh,-hw),(hw,sh,-hw),(hw,sh,hw),(-hw,sh,hw),
+           (0,sh+hh,0)]
+    idxs = [
+        "3 2 1 0 -1",       # shaft bottom (looking up from below = CCW outside)
+        "0 1 5 4 -1",       # shaft front (-z face)
+        "1 2 6 5 -1",       # shaft right (+x face)
+        "2 3 7 6 -1",       # shaft back (+z face)
+        "3 0 4 7 -1",       # shaft left (-x face)
+        "11 10 9 8 -1",     # head base (looking up = CCW outside)
+        "12 8 9 -1","12 9 10 -1","12 10 11 -1","12 11 8 -1",  # head sides
+    ]
+    return pts, idxs
 
-    # Outer side wall
-    for i in range(s):
-        n = (i + 1) % s
-        idxs.append(f"{i} {2*s+i} {2*s+n} {n} -1")
+# ── capsule (cylinder body + two hemisphere caps, no flat disk overlap) ───────
 
-    # Inner side wall
-    for i in range(s):
-        n = (i + 1) % s
-        idxs.append(f"{s+i} {s+n} {3*s+n} {3*s+i} -1")
+def _build_capsule(s):
+    cyl_r = s*0.44
+    cyl_h = s*1.2
+    U, V  = 20, 10    # longitude, latitude for caps
 
-    pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts)
-    idx_str = " ".join(idxs)
-    geo = _ifs(pts_str, idx_str, mat_str, smooth=False)
-    return (f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>\n'
-            f'      <Shape>{geo}{mat_str}</Shape>\n'
-            f'    </Transform>\n')
+    pts, idxs = [], []
 
+    # ── cylinder body (2 rings) ──
+    for i in range(U):
+        a = 2*math.pi*i/U
+        pts.append((cyl_r*math.cos(a),  cyl_h/2, cyl_r*math.sin(a)))  # ring 0: top
+    for i in range(U):
+        a = 2*math.pi*i/U
+        pts.append((cyl_r*math.cos(a), -cyl_h/2, cyl_r*math.sin(a)))  # ring 1: bot
 
-def build_torusknot_xml(r, g, b, x, y, z, size, rotation, transparency):
-    """Solid torus knot (p=2,q=3): tube mesh swept along the knot path."""
-    path_steps = 120   # knot path resolution
-    tube_steps = 12    # tube cross-section resolution
-    p, q = 2, 3
-    R    = size * 0.7   # major radius
-    r2   = size * 0.28  # knot tube radius
-    tube_r = size * 0.10  # cross-section radius
+    # cylinder side quads  (ring0 → ring1)
+    for i in range(U):
+        ni = (i+1)%U
+        idxs.append(f"{i} {ni} {U+ni} {U+i} -1")
 
-    mat_str = _mat(r, g, b, transparency)
-    rot_str = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
+    # ── top hemisphere ──
+    # lat rings from cyl top ring outward to tip
+    hem_top_base = len(pts)
+    for lat in range(1, V):
+        phi = math.pi/2 * lat/V    # 0 → π/2
+        rr = cyl_r*math.cos(phi)
+        yy = cyl_h/2 + cyl_r*math.sin(phi)
+        for i in range(U):
+            a=2*math.pi*i/U
+            pts.append((rr*math.cos(a), yy, rr*math.sin(a)))
 
-    # Compute path points and Frenet frames
-    def knot_pt(t):
-        px = (R + r2 * math.cos(q * t)) * math.cos(p * t)
-        py = (R + r2 * math.cos(q * t)) * math.sin(p * t)
-        pz = r2 * math.sin(q * t)
-        return (px, py, pz)
+    tip_top = len(pts)
+    pts.append((0, cyl_h/2+cyl_r, 0))
 
-    path = [knot_pt(2 * math.pi * i / path_steps) for i in range(path_steps)]
+    # connect cyl top ring to first hem ring
+    first_hem = hem_top_base
+    for i in range(U):
+        ni=(i+1)%U
+        idxs.append(f"{i} {ni} {first_hem+ni} {first_hem+i} -1")
 
-    def sub(a, b_): return (a[0]-b_[0], a[1]-b_[1], a[2]-b_[2])
-    def add(a, b_): return (a[0]+b_[0], a[1]+b_[1], a[2]+b_[2])
-    def scale(a, s): return (a[0]*s, a[1]*s, a[2]*s)
-    def norm(v):
-        L = math.sqrt(sum(c*c for c in v))
-        return (v[0]/L, v[1]/L, v[2]/L) if L > 1e-9 else (1,0,0)
-    def cross(a, b_): return (a[1]*b_[2]-a[2]*b_[1], a[2]*b_[0]-a[0]*b_[2], a[0]*b_[1]-a[1]*b_[0])
+    # connect consecutive hem rings
+    for lat in range(1, V-1):
+        pr = hem_top_base + (lat-1)*U
+        cu = hem_top_base + lat*U
+        for i in range(U):
+            ni=(i+1)%U
+            idxs.append(f"{pr+i} {pr+ni} {cu+ni} {cu+i} -1")
 
-    # Tangents
-    tangents = [norm(sub(path[(i+1)%path_steps], path[(i-1)%path_steps]))
-                for i in range(path_steps)]
+    # connect last hem ring to tip
+    last_top = hem_top_base + (V-2)*U
+    for i in range(U):
+        ni=(i+1)%U
+        idxs.append(f"{last_top+i} {last_top+ni} {tip_top} -1")
 
-    # Parallel transport normals
-    normals = [None] * path_steps
-    normals[0] = norm(cross(tangents[0], (0,1,0)) if abs(tangents[0][1]) < 0.9
-                      else cross(tangents[0], (1,0,0)))
-    for i in range(1, path_steps):
-        b_vec = cross(tangents[i-1], tangents[i])
-        if math.sqrt(sum(c*c for c in b_vec)) < 1e-9:
-            normals[i] = normals[i-1]
-        else:
-            axis = norm(b_vec)
-            cos_a = max(-1, min(1, sum(tangents[i-1][k]*tangents[i][k] for k in range(3))))
-            sin_a = math.sqrt(max(0, 1 - cos_a*cos_a))
-            n = normals[i-1]
-            normals[i] = norm(add(add(scale(n, cos_a),
-                                      scale(cross(axis, n), sin_a)),
-                                  scale(axis, sum(axis[k]*n[k] for k in range(3))*(1-cos_a))))
+    # ── bottom hemisphere ──
+    hem_bot_base = len(pts)
+    for lat in range(1, V):
+        phi = math.pi/2*lat/V
+        rr = cyl_r*math.cos(phi)
+        yy = -(cyl_h/2+cyl_r*math.sin(phi))
+        for i in range(U):
+            a=2*math.pi*i/U
+            pts.append((rr*math.cos(a), yy, rr*math.sin(a)))
 
-    # Generate tube vertices
-    pts = []
-    for i in range(path_steps):
-        T = tangents[i]
-        N = normals[i]
-        B = norm(cross(T, N))
-        cx, cy, cz = path[i]
-        for j in range(tube_steps):
-            ang = 2 * math.pi * j / tube_steps
-            dx = tube_r * (math.cos(ang) * N[0] + math.sin(ang) * B[0])
-            dy = tube_r * (math.cos(ang) * N[1] + math.sin(ang) * B[1])
-            dz = tube_r * (math.cos(ang) * N[2] + math.sin(ang) * B[2])
-            pts.append((cx+dx, cy+dy, cz+dz))
+    tip_bot = len(pts)
+    pts.append((0, -(cyl_h/2+cyl_r), 0))
 
-    # Generate faces
+    # connect cyl bot ring to first bot-hem ring (reversed winding)
+    first_bot = hem_bot_base
+    for i in range(U):
+        ni=(i+1)%U
+        idxs.append(f"{U+i} {first_bot+i} {first_bot+ni} {U+ni} -1")
+
+    for lat in range(1, V-1):
+        pr = hem_bot_base + (lat-1)*U
+        cu = hem_bot_base + lat*U
+        for i in range(U):
+            ni=(i+1)%U
+            idxs.append(f"{pr+i} {cu+i} {cu+ni} {pr+ni} -1")
+
+    last_bot = hem_bot_base + (V-2)*U
+    for i in range(U):
+        ni=(i+1)%U
+        idxs.append(f"{tip_bot} {last_bot+ni} {last_bot+i} -1")
+
+    return pts, idxs
+
+# ── cross (3-box Group) ───────────────────────────────────────────────────────
+
+def _build_cross_xml(s, mat):
+    w, L = s*0.36, s*1.8
+    return (f'      <Group>\n'
+            f'        <Shape><Box size="{L:.3f} {w:.3f} {w:.3f}"/>{mat}</Shape>\n'
+            f'        <Shape><Box size="{w:.3f} {L:.3f} {w:.3f}"/>{mat}</Shape>\n'
+            f'        <Shape><Box size="{w:.3f} {w:.3f} {L:.3f}"/>{mat}</Shape>\n'
+            f'      </Group>\n')
+
+# ── crescent (extruded annular arc) ─────────────────────────────────────────
+
+def _build_crescent(s):
+    OR, IR, off, d = s, s*0.60, s*0.32, s*0.22
+    N = 32   # points per arc
+    # Build 2D outline: outer full circle, inner offset circle
+    outer_f  = [(OR*math.cos(2*math.pi*i/N), OR*math.sin(2*math.pi*i/N)) for i in range(N)]
+    inner_f  = [(IR*math.cos(2*math.pi*i/N)+off, IR*math.sin(2*math.pi*i/N)) for i in range(N)]
+    # front z=+d, back z=-d
+    pts = ([(x,y, d) for x,y in outer_f] +   # 0..N-1    front outer
+           [(x,y, d) for x,y in inner_f] +   # N..2N-1   front inner
+           [(x,y,-d) for x,y in outer_f] +   # 2N..3N-1  back outer
+           [(x,y,-d) for x,y in inner_f])    # 3N..4N-1  back inner
+
     idxs = []
-    for i in range(path_steps):
-        ni = (i + 1) % path_steps
-        for j in range(tube_steps):
-            nj = (j + 1) % tube_steps
-            a_ = i  * tube_steps + j
-            b_ = i  * tube_steps + nj
-            c_ = ni * tube_steps + nj
-            d_ = ni * tube_steps + j
+    # front annular ring (CCW from +z)
+    for i in range(N):
+        ni=(i+1)%N
+        idxs.append(f"{i} {N+i} {N+ni} {ni} -1")
+    # back annular ring (reversed for CCW from -z)
+    for i in range(N):
+        ni=(i+1)%N
+        idxs.append(f"{2*N+i} {2*N+ni} {3*N+ni} {3*N+i} -1")
+    # outer side wall
+    for i in range(N):
+        ni=(i+1)%N
+        idxs.append(f"{i} {ni} {2*N+ni} {2*N+i} -1")
+    # inner side wall (reversed)
+    for i in range(N):
+        ni=(i+1)%N
+        idxs.append(f"{N+i} {3*N+i} {3*N+ni} {N+ni} -1")
+
+    return pts, idxs
+
+# ── helix (swept tube) ───────────────────────────────────────────────────────
+
+def _build_helix_path(s):
+    turns, segs = 3, 72
+    R, pitch = s*0.70, s*0.52
+    total = turns*segs
+    return [(R*math.cos(2*math.pi*i/segs),
+             pitch*i/segs - pitch*turns/2,
+             R*math.sin(2*math.pi*i/segs))
+            for i in range(total+1)]
+
+# ── torus knot (swept tube) ──────────────────────────────────────────────────
+
+def _build_torusknot_path(s):
+    segs = 160
+    p_, q_ = 2, 3
+    R, r = s*0.65, s*0.24
+    path = []
+    for i in range(segs):
+        t = 2*math.pi*i/segs
+        path.append(((R+r*math.cos(q_*t))*math.cos(p_*t),
+                     (R+r*math.cos(q_*t))*math.sin(p_*t),
+                      r*math.sin(q_*t)))
+    return path
+
+# ── plane (flat ground, subdivided, double-sided via solid=false) ─────────────
+
+def _build_plane(s):
+    S, D = s*2, 6
+    step = S*2/D
+    pts = [(-S + c*step, 0, -S + r*step)
+           for r in range(D+1) for c in range(D+1)]
+    idxs = []
+    for r in range(D):
+        for c in range(D):
+            a_ = r*(D+1)+c
+            b_ = a_+1; c_ = (r+1)*(D+1)+c+1; d_ = (r+1)*(D+1)+c
             idxs.append(f"{a_} {b_} {c_} {d_} -1")
+    return pts, idxs
 
-    pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts)
-    idx_str = " ".join(idxs)
-    geo = _ifs(pts_str, idx_str, mat_str, smooth=True)
-    return (f'    <Transform translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>\n'
-            f'      <Shape>{geo}{mat_str}</Shape>\n'
-            f'    </Transform>\n')
+# ── master builder ─────────────────────────────────────────────────────────────
+
+def build_shape_xml(shape, color, position, size, rotation=None, transparency=0.0, animation=None, obj_id=None):
+    r, g, b = color
+    x, y, z = position
+    mat = _mat(r, g, b, transparency)
+    rot = rotation
+    s   = size
+
+    # ── X3D built-in primitives ──────────────────────────────────────────────
+    if shape == "sphere":
+        return _wrap(_shape(f'<Sphere radius="{s:.3f}"/>', mat), x,y,z,rot,obj_id)
+    if shape == "cone":
+        return _wrap(_shape(f'<Cone bottomRadius="{s:.3f}" height="{s*2:.3f}"/>', mat), x,y,z,rot,obj_id)
+    if shape == "cylinder":
+        return _wrap(_shape(f'<Cylinder radius="{s:.3f}" height="{s*2:.3f}"/>', mat), x,y,z,rot,obj_id)
+    if shape == "box":
+        d = s*2
+        return _wrap(_shape(f'<Box size="{d:.3f} {d:.3f} {d:.3f}"/>', mat), x,y,z,rot,obj_id)
+    if shape == "ellipsoid":
+        rot_str = (f' rotation="{rot[0]} {rot[1]} {rot[2]} {rot[3]:.4f}"' if rot else "")
+        def_str = f' DEF="obj_{obj_id}"' if obj_id is not None else ""
+        body = f'      <Shape><Sphere radius="{s:.3f}"/>{mat}</Shape>\n'
+        return (f'    <Transform{def_str} translation="{x:.3f} {y:.3f} {z:.3f}"'
+                f' scale="1.0 0.65 1.45"{rot_str}>\n{body}    </Transform>\n')
+
+    # ── cross (multi-box group) ──────────────────────────────────────────────
+    if shape == "cross":
+        return _wrap(_build_cross_xml(s, mat), x,y,z,rot,obj_id)
+
+    # ── IFS shapes ──────────────────────────────────────────────────────────
+    if shape == "torus":
+        pts, idxs = _build_torus(s)
+        geo = _ifs(pts, idxs, crease=1.5)
+    elif shape == "tetrahedron":
+        pts, idxs = _build_tetrahedron(s)
+        geo = _ifs(pts, idxs, crease=0)
+    elif shape == "octahedron":
+        pts, idxs = _build_octahedron(s)
+        geo = _ifs(pts, idxs, crease=0)
+    elif shape == "icosahedron":
+        pts, idxs = _build_icosahedron(s)
+        geo = _ifs(pts, idxs, crease=0.5)
+    elif shape == "dodecahedron":
+        pts, idxs = _build_dodecahedron(s)
+        geo = _ifs(pts, idxs, crease=0)
+    elif shape == "star":
+        pts, idxs = _build_star(s)
+        geo = _ifs(pts, idxs, crease=0)
+    elif shape == "arrow":
+        pts, idxs = _build_arrow(s)
+        geo = _ifs(pts, idxs, crease=0.3)
+    elif shape == "capsule":
+        pts, idxs = _build_capsule(s)
+        geo = _ifs(pts, idxs, crease=1.5)
+    elif shape == "crescent":
+        pts, idxs = _build_crescent(s)
+        geo = _ifs(pts, idxs, crease=0)
+    elif shape == "helix":
+        path = _build_helix_path(s)
+        pts, idxs = _tube_sweep(path, s*0.09, closed=False)
+        geo = _ifs(pts, idxs, crease=1.5)
+    elif shape == "torusknot":
+        path = _build_torusknot_path(s)
+        pts, idxs = _tube_sweep(path, s*0.09, closed=True)
+        geo = _ifs(pts, idxs, crease=1.5)
+    elif shape == "plane":
+        pts, idxs = _build_plane(s)
+        geo = _ifs(pts, idxs, crease=0)
+    else:
+        d = s*2
+        return _wrap(_shape(f'<Box size="{d:.3f} {d:.3f} {d:.3f}"/>', mat), x,y,z,rot,obj_id)
+
+    return _wrap(_shape(geo, mat), x,y,z,rot,obj_id)
+
 
 
 def build_animation_xml(anim_type, shape_id=None):
@@ -893,248 +1041,6 @@ def build_animation_xml(anim_type, shape_id=None):
     <ROUTE fromNode="clock_{shape_id}" fromField="fraction_changed" toNode="pulse_{shape_id}" toField="set_fraction"/>
 '''
     return ""
-
-
-def build_shape_xml(shape, color, position, size, rotation=None, transparency=0.0, animation=None, obj_id=None):
-    r, g, b = color
-    x, y, z = position
-
-    # special multi-node shapes
-    if shape == "capsule":
-        return build_capsule_xml(r, g, b, x, y, z, size, rotation, transparency)
-    if shape == "dodecahedron":
-        return build_dodecahedron_xml(r, g, b, x, y, z, size, rotation, transparency)
-    if shape == "cross":
-        return build_cross_xml(r, g, b, x, y, z, size, rotation, transparency)
-    if shape == "crescent":
-        return build_crescent_xml(r, g, b, x, y, z, size, rotation, transparency)
-    if shape == "torusknot":
-        return build_torusknot_xml(r, g, b, x, y, z, size, rotation, transparency)
-
-    if shape == "sphere":
-        geo = f'<Sphere radius="{size:.3f}"/>'
-    elif shape == "cone":
-        geo = f'<Cone bottomRadius="{size:.3f}" height="{size*2:.3f}"/>'
-    elif shape == "cylinder":
-        geo = f'<Cylinder radius="{size:.3f}" height="{size*2:.3f}"/>'
-    elif shape == "torus":
-        outer, inner, steps = size, size * 0.35, 24
-        pts, idxs = [], []
-        for i in range(steps):
-            a = 2 * math.pi * i / steps
-            for j in range(steps):
-                b2 = 2 * math.pi * j / steps
-                px = (outer + inner * math.cos(b2)) * math.cos(a)
-                py = inner * math.sin(b2)
-                pz = (outer + inner * math.cos(b2)) * math.sin(a)
-                pts.append(f"{px:.3f} {py:.3f} {pz:.3f}")
-        for i in range(steps):
-            for j in range(steps):
-                aa = i * steps + j
-                bb = i * steps + (j+1) % steps
-                cc = ((i+1) % steps) * steps + (j+1) % steps
-                dd = ((i+1) % steps) * steps + j
-                idxs.append(f"{aa} {bb} {cc} {dd} -1")
-        geo = (f'<IndexedFaceSet coordIndex="{" ".join(idxs)}" solid="false" creaseAngle="1.5">'
-               f'<Coordinate point="{" ".join(pts)}"/></IndexedFaceSet>')
-    elif shape == "tetrahedron":
-        s = size
-        geo = (f'<IndexedFaceSet coordIndex="0 1 2 -1 0 3 1 -1 1 3 2 -1 0 2 3 -1" solid="false" creaseAngle="0.5">'
-               f'<Coordinate point="{s:.3f} 0 {-s*0.577:.3f}  -{s:.3f} 0 {-s*0.577:.3f}  0 0 {s*1.155:.3f}  0 {s*1.633:.3f} 0"/>'
-               f'</IndexedFaceSet>')
-    elif shape == "octahedron":
-        s = size
-        pts = f"0 {s:.3f} 0  {s:.3f} 0 0  0 0 {s:.3f}  -{s:.3f} 0 0  0 0 -{s:.3f}  0 -{s:.3f} 0"
-        idx = "0 1 2 -1 0 2 3 -1 0 3 4 -1 0 4 1 -1 5 2 1 -1 5 3 2 -1 5 4 3 -1 5 1 4 -1"
-        geo = (f'<IndexedFaceSet coordIndex="{idx}" solid="false" creaseAngle="0.5">'
-               f'<Coordinate point="{pts}"/></IndexedFaceSet>')
-    elif shape == "icosahedron":
-        s = size
-        t_ratio = (1.0 + math.sqrt(5.0)) / 2.0
-        raw = [(-1,t_ratio,0),(1,t_ratio,0),(-1,-t_ratio,0),(1,-t_ratio,0),
-               (0,-1,t_ratio),(0,1,t_ratio),(0,-1,-t_ratio),(0,1,-t_ratio),
-               (t_ratio,0,-1),(t_ratio,0,1),(-t_ratio,0,-1),(-t_ratio,0,1)]
-        norm = math.sqrt(1 + t_ratio**2)
-        verts = [f"{vx/norm*s:.3f} {vy/norm*s:.3f} {vz/norm*s:.3f}" for vx, vy, vz in raw]
-        faces = [0,11,5,0,5,1,0,1,7,0,7,10,0,10,11,1,5,9,5,11,4,11,10,2,10,7,6,7,1,8,
-                 3,9,4,3,4,2,3,2,6,3,6,8,3,8,9,4,9,5,2,4,11,6,2,10,8,6,7,9,8,1]
-        idx_str = " ".join(f"{faces[i]} {faces[i+1]} {faces[i+2]} -1" for i in range(0, len(faces), 3))
-        geo = (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false" creaseAngle="0.5">'
-               f'<Coordinate point="{" ".join(verts)}"/></IndexedFaceSet>')
-    elif shape == "star":
-        # Solid extruded 5-pointed star
-        outer_r, inner_r = size, size * 0.42
-        depth = size * 0.28
-        npts  = 5
-        # 2D star outline (10 vertices alternating outer/inner)
-        outline = []
-        for i in range(npts * 2):
-            ang = math.pi / npts * i - math.pi / 2
-            rad = outer_r if i % 2 == 0 else inner_r
-            outline.append((math.cos(ang) * rad, math.sin(ang) * rad))
-        n = len(outline)
-        pts = []
-        # front face (z=+depth/2)
-        for ox, oy in outline:
-            pts.append((ox, oy,  depth/2))
-        pts.append((0, 0,  depth/2))    # front center  idx=n
-        # back face (z=-depth/2)
-        for ox, oy in outline:
-            pts.append((ox, oy, -depth/2))
-        pts.append((0, 0, -depth/2))   # back center   idx=2n+1
-        idxs = []
-        # front triangles
-        for i in range(n):
-            idxs.append(f"{n} {i} {(i+1)%n} -1")
-        # back triangles (reversed)
-        for i in range(n):
-            idxs.append(f"{2*n+1} {n+1+(i+1)%n} {n+1+i} -1")
-        # side quads
-        for i in range(n):
-            ni = (i+1) % n
-            idxs.append(f"{i} {n+1+i} {n+1+ni} {ni} -1")
-        pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts)
-        idx_str = " ".join(idxs)
-        geo = (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false" creaseAngle="0">'
-               f'<Coordinate point="{pts_str}"/></IndexedFaceSet>')
-    elif shape == "arrow":
-        # Full 3D arrow: square-section shaft + pyramid head pointing up (+Y)
-        s = size
-        sw = s * 0.18   # shaft half-width
-        sh = s * 1.1    # shaft height (from 0 to sh)
-        hw = s * 0.45   # head base half-width
-        hh = s * 0.8    # head height
-        # Shaft box verts (8)
-        shaft = [
-            (-sw, 0,  -sw), ( sw, 0,  -sw), ( sw, 0,   sw), (-sw, 0,   sw),   # 0-3 bottom
-            (-sw, sh, -sw), ( sw, sh, -sw), ( sw, sh,  sw), (-sw, sh,  sw),   # 4-7 top
-        ]
-        # Arrowhead base verts (4) + tip (1)
-        head_base_y = sh
-        head = [
-            (-hw, head_base_y, -hw), ( hw, head_base_y, -hw),  # 8,9
-            ( hw, head_base_y,  hw), (-hw, head_base_y,  hw),  # 10,11
-        ]
-        tip = (0, sh + hh, 0)  # 12
-        pts = shaft + head + [tip]
-        idxs = [
-            # Shaft faces
-            "0 4 5 1 -1",   # front  (-z)
-            "1 5 6 2 -1",   # right  (+x)
-            "2 6 7 3 -1",   # back   (+z)
-            "3 7 4 0 -1",   # left   (-x)
-            "0 1 2 3 -1",   # bottom
-            # No top face on shaft (hidden inside head base)
-            # Head base (4 triangles from center implied, do 2 tris)
-            "8 9 10 11 -1",
-            # Head sides
-            "12 8 9 -1", "12 9 10 -1", "12 10 11 -1", "12 11 8 -1",
-        ]
-        pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts)
-        idx_str = " ".join(idxs)
-        geo = (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false" creaseAngle="0.3">'
-               f'<Coordinate point="{pts_str}"/></IndexedFaceSet>')
-    elif shape == "helix":
-        # Solid tube helix using swept circle cross-sections
-        turns, path_segs, tube_segs = 3, 80, 10
-        total  = turns * path_segs
-        radius = size * 0.75
-        pitch  = size * 0.55
-        tube_r = size * 0.10
-
-        # Path points
-        path_pts = []
-        for i in range(total + 1):
-            ang = 2 * math.pi * i / path_segs
-            px  = radius * math.cos(ang)
-            py  = pitch * i / path_segs - (pitch * turns / 2)
-            pz  = radius * math.sin(ang)
-            path_pts.append((px, py, pz))
-
-        def v3sub(a, b_): return (a[0]-b_[0], a[1]-b_[1], a[2]-b_[2])
-        def v3norm(v):
-            L = math.sqrt(v[0]**2+v[1]**2+v[2]**2)
-            return (v[0]/L, v[1]/L, v[2]/L) if L>1e-9 else (1,0,0)
-        def v3cross(a, b_):
-            return (a[1]*b_[2]-a[2]*b_[1], a[2]*b_[0]-a[0]*b_[2], a[0]*b_[1]-a[1]*b_[0])
-
-        pts_list = []
-        idxs_list = []
-        for i in range(total + 1):
-            if i < total:
-                T = v3norm(v3sub(path_pts[i+1], path_pts[i]))
-            else:
-                T = v3norm(v3sub(path_pts[i], path_pts[i-1]))
-            # Build frame
-            up = (0, 1, 0) if abs(T[1]) < 0.9 else (1, 0, 0)
-            N = v3norm(v3cross(T, up))
-            B = v3norm(v3cross(T, N))
-            cx, cy, cz = path_pts[i]
-            for j in range(tube_segs):
-                ang = 2 * math.pi * j / tube_segs
-                dx = tube_r * (math.cos(ang)*N[0] + math.sin(ang)*B[0])
-                dy = tube_r * (math.cos(ang)*N[1] + math.sin(ang)*B[1])
-                dz = tube_r * (math.cos(ang)*N[2] + math.sin(ang)*B[2])
-                pts_list.append((cx+dx, cy+dy, cz+dz))
-
-        for i in range(total):
-            for j in range(tube_segs):
-                nj = (j+1) % tube_segs
-                a_ = i*tube_segs+j; b_ = i*tube_segs+nj
-                c_ = (i+1)*tube_segs+nj; d_ = (i+1)*tube_segs+j
-                idxs_list.append(f"{a_} {b_} {c_} {d_} -1")
-
-        pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts_list)
-        idx_str = " ".join(idxs_list)
-        geo = (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false" creaseAngle="1.5">'
-               f'<Coordinate point="{pts_str}"/></IndexedFaceSet>')
-    elif shape == "plane":
-        # Subdivided plane with double-sided normals
-        s = size * 2
-        divs = 4
-        pts_list = []
-        idxs_list = []
-        step = s * 2 / divs
-        for row in range(divs + 1):
-            for col in range(divs + 1):
-                pts_list.append((-s + col*step, 0, -s + row*step))
-        for row in range(divs):
-            for col in range(divs):
-                a_ = row*(divs+1)+col
-                b_ = a_+1
-                c_ = (row+1)*(divs+1)+col+1
-                d_ = (row+1)*(divs+1)+col
-                idxs_list.append(f"{a_} {b_} {c_} {d_} -1")
-                idxs_list.append(f"{d_} {c_} {b_} {a_} -1")   # back face
-        pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts_list)
-        idx_str = " ".join(idxs_list)
-        geo = (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false" creaseAngle="0">'
-               f'<Coordinate point="{pts_str}"/></IndexedFaceSet>')
-    elif shape == "ellipsoid":
-        geo = f'<Sphere radius="{size:.3f}"/>'
-        mat_str = _mat(r, g, b, transparency)
-        rot_str = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
-        def_str = f' DEF="obj_{obj_id}"' if obj_id else ""
-        return (f'    <Transform{def_str} translation="{x:.3f} {y:.3f} {z:.3f}" scale="1.0 0.6 1.4"{rot_str}>\n'
-                f'      <Shape>{geo}{mat_str}</Shape>\n'
-                f'    </Transform>\n')
-    else:
-        s = size * 2
-        geo = f'<Box size="{s:.3f} {s:.3f} {s:.3f}"/>'
-
-    rot_str = f' rotation="{rotation[0]} {rotation[1]} {rotation[2]} {rotation[3]:.4f}"' if rotation else ""
-    def_str = f' DEF="obj_{obj_id}"' if obj_id else ""
-
-    mat_str = _mat(r, g, b, transparency)
-    lines = [
-        f'    <Transform{def_str} translation="{x:.3f} {y:.3f} {z:.3f}"{rot_str}>',
-        f'      <Shape>',
-        f'        {geo}',
-        f'        {mat_str}',
-        f'      </Shape>',
-        f'    </Transform>',
-    ]
-    return "\n".join(lines) + "\n"
 
 
 def build_lighting_xml(preset: str) -> str:
