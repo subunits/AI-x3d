@@ -111,6 +111,7 @@ COLORS = {
     "magma":      (0.90, 0.20, 0.00),
     "ice":        (0.80, 0.95, 1.00),
     "lemon":      (1.00, 0.97, 0.00),
+    "golden":     (1.00, 0.84, 0.00),
     "wine":       (0.45, 0.00, 0.13),
     "transparent":(0.50, 0.50, 0.50),
 }
@@ -203,7 +204,7 @@ SHAPE_ALIASES = {
     # cylinder
     "cylinder": "cylinder", "tube": "cylinder", "pipe": "cylinder", "pillar": "cylinder",
     "column": "cylinder", "barrel": "cylinder", "rod": "cylinder", "pole": "cylinder",
-    "straw": "cylinder", "can": "cylinder", "drum": "cylinder",
+    "straw": "cylinder",
     # box
     "box": "box", "cube": "box", "block": "box", "brick": "box",
     "square": "box", "rectangle": "box", "crate": "box", "chest": "box",
@@ -272,7 +273,7 @@ ADD_VERBS = (
 )
 
 CLEAR_PHRASES = (
-    "clear", "reset", "remove all", "delete all", "wipe", "empty",
+    "clear", "remove all", "delete all", "wipe", "empty",
     "start over", "start fresh", "start from scratch", "scratch this",
     "clean slate", "erase", "nuke", "blow it up", "destroy",
     "fresh start", "new scene",
@@ -304,17 +305,19 @@ ARCHIVE_EXAMPLES = {
 LIGHT_BRIGHT_PHRASES  = ("brighter", "more light", "increase light", "brighten", "lighter", "turn up light")
 LIGHT_DIM_PHRASES     = ("dimmer", "less light", "decrease light", "dim", "darker", "turn down light", "darken")
 LIGHT_NIGHT_PHRASES   = ("night", "nighttime", "night mode", "dark mode", "moonlight")
-LIGHT_DAY_PHRASES     = ("day", "daytime", "daylight", "sun", "sunny", "noon")
-LIGHT_SUNRISE_PHRASES = ("sunrise", "dawn", "golden hour", "warm light", "sunset")
+LIGHT_DAY_PHRASES     = ("day", "daytime", "daylight", "sunny", "noon", "midday")
+LIGHT_SUNRISE_PHRASES = ("sunrise", "dawn", "golden hour", "warm light", "sunset", "dusk")
 LIGHT_NEON_PHRASES    = ("neon", "neon light", "club", "disco", "rave", "blacklight")
-LIGHT_SPOT_PHRASES    = ("spotlight", "spot light", "add light", "add spotlight", "add a light")
+LIGHT_SPOT_PHRASES    = ("spotlight", "spot light", "add spotlight", "add a spotlight", "add a light", "add some light", "add lights", "add a pointlight", "add point light")
 
 # ── Camera command keywords ────────────────────────────────────────────────────
-CAM_RESET_PHRASES   = ("reset camera", "reset view", "default view", "reset viewport")
-CAM_TOP_PHRASES     = ("top view", "bird's eye", "birds eye", "look down", "view from top", "overhead view")
+CAM_RESET_PHRASES   = ("reset camera", "reset view", "default view", "reset viewport", "default camera")
+CAM_ZOOM_IN_PHRASES  = ("zoom in", "move closer")
+CAM_ZOOM_OUT_PHRASES = ("zoom out", "pull back", "move back")
+CAM_TOP_PHRASES     = ("top view", "bird's eye", "birds eye", "bird eye", "look down", "view from top", "overhead view", "from above")
 CAM_FRONT_PHRASES   = ("front view", "look from front", "face on", "straight on")
-CAM_SIDE_PHRASES    = ("side view", "look from side", "profile view")
-CAM_ISO_PHRASES     = ("isometric", "iso view", "3/4 view", "three quarter")
+CAM_SIDE_PHRASES    = ("side view", "look from side", "profile view", "profile", "from the side")
+CAM_ISO_PHRASES     = ("isometric", "iso view", "3/4 view", "three quarter", "3d view")
 
 # ── Animation command keywords ─────────────────────────────────────────────────
 ANIM_SPIN_PHRASES   = ("spin", "rotate", "spinning", "rotating", "make it spin", "make it rotate", "animate")
@@ -407,9 +410,12 @@ def parse_rotation(t: str):
     return None
 
 
-def parse_count(t: str):
-    """Parse a count like 'add 5 red spheres'."""
-    m = re.search(r'\b(\d+)\b', t)
+def parse_count(t: str, strip_coords: str = ""):
+    """Parse a count like 'add 5 red spheres'.
+    strip_coords: if provided, remove this substring before scanning for count.
+    """
+    search_t = t.replace(strip_coords, "") if strip_coords else t
+    m = re.search(r'\b(\d+)\b', search_t)
     if m:
         n = int(m.group(1))
         if 2 <= n <= 20:
@@ -448,6 +454,8 @@ def parse_animation(t: str):
 
 def parse_prompt(text: str) -> dict:
     t = text.lower().strip()
+    if not t:
+        return {"action": "help", "message": "Try: add a red sphere, night, spin, clear"}
 
     # ── Clear ─────────────────────────────────────────────────────────────────
     if any(w in t for w in CLEAR_PHRASES):
@@ -478,6 +486,10 @@ def parse_prompt(text: str) -> dict:
         return {"action": "camera", "view": "side"}
     if any(p in t for p in CAM_ISO_PHRASES):
         return {"action": "camera", "view": "iso"}
+    if any(p in t for p in CAM_ZOOM_IN_PHRASES):
+        return {"action": "camera", "view": "zoom_in"}
+    if any(p in t for p in CAM_ZOOM_OUT_PHRASES):
+        return {"action": "camera", "view": "zoom_out"}
 
     # ── Detect shape early (before lighting, so "neon torus knot" hits shape not light) ──
     detected_shape = None
@@ -492,10 +504,13 @@ def parse_prompt(text: str) -> dict:
             return {"action": "add_light", "light_type": "spot"}
         if any(p in t for p in LIGHT_NIGHT_PHRASES):
             return {"action": "lighting", "preset": "night"}
-        if any(p in t for p in LIGHT_DAY_PHRASES):
-            return {"action": "lighting", "preset": "day"}
         if any(p in t for p in LIGHT_SUNRISE_PHRASES):
             return {"action": "lighting", "preset": "sunrise"}
+        if any(p in t for p in LIGHT_DAY_PHRASES):
+            return {"action": "lighting", "preset": "day"}
+        # "sun" word-boundary check for plain "sun" / "sunny day" etc
+        if re.search(r'\bsun\b', t):
+            return {"action": "lighting", "preset": "day"}
         if any(p in t for p in LIGHT_NEON_PHRASES):
             return {"action": "lighting", "preset": "neon"}
         if any(p in t for p in LIGHT_BRIGHT_PHRASES):
@@ -514,7 +529,11 @@ def parse_prompt(text: str) -> dict:
     size         = parse_size(t)
     position     = parse_position(t)
     rotation     = parse_rotation(t)
-    count        = parse_count(t)
+    # extract raw coord match to exclude from count parsing
+    _coord_raw = ""
+    _coord_m = re.search(r'(?:at|position|pos|translate|move to|place at|put at)\s+([-\d.]+\s+[-\d.]+\s+[-\d.]+)', t)
+    if _coord_m: _coord_raw = _coord_m.group(0)
+    count        = parse_count(t, strip_coords=_coord_raw)
     arrangement  = parse_arrangement(t) if count > 1 else None
     transparent  = any(w in t for w in (
         "transparent", "glass", "see through", "see-through", "translucent", "ghostly", "ghost", "crystal clear", "invisible"))
@@ -1064,11 +1083,13 @@ def build_lighting_xml(preset: str) -> str:
 
 def build_viewpoint_xml(view: str) -> str:
     viewpoints = {
-        "reset": '<Viewpoint description="Default" position="0 0 10" orientation="0 1 0 0"/>',
-        "top":   '<Viewpoint description="Top" position="0 12 0" orientation="1 0 0 -1.5708"/>',
-        "front": '<Viewpoint description="Front" position="0 0 12" orientation="0 1 0 0"/>',
-        "side":  '<Viewpoint description="Side" position="12 0 0" orientation="0 1 0 1.5708"/>',
-        "iso":   '<Viewpoint description="Iso" position="7 7 7" orientation="0.577 0.577 0.577 -1.5708"/>',
+        "reset":    '<Viewpoint description="Default" position="0 0 10" orientation="0 1 0 0"/>',
+        "top":      '<Viewpoint description="Top" position="0 12 0" orientation="1 0 0 -1.5708"/>',
+        "front":    '<Viewpoint description="Front" position="0 0 12" orientation="0 1 0 0"/>',
+        "side":     '<Viewpoint description="Side" position="12 0 0" orientation="0 1 0 1.5708"/>',
+        "iso":      '<Viewpoint description="Iso" position="7 7 7" orientation="0.577 0.577 0.577 -1.5708"/>',
+        "zoom_in":  '<Viewpoint description="Close" position="0 0 5" orientation="0 1 0 0"/>',
+        "zoom_out": '<Viewpoint description="Wide" position="0 0 20" orientation="0 1 0 0"/>',
     }
     return viewpoints.get(view, viewpoints["reset"])
 
@@ -1266,13 +1287,16 @@ async def run_agent(req: PromptRequest):
                 with open(SCENE_FILE, "w") as f:
                     f.write(content)
                 return {"status": "success", "message": "Animation stopped."}
-            obj_id = len(SCENE_OBJECTS)
+            if not SCENE_OBJECTS:
+                return {"status": "ok", "message": "No objects in scene to animate."}
+            obj_id = len(SCENE_OBJECTS) - 1
             anim_xml = build_animation_xml(anim, obj_id)
             ensure_scene_file()
             with open(SCENE_FILE, "r") as f:
                 content = f.read()
-            # Tag the last Transform with a DEF
-            content = content.replace("<Transform ", f'<Transform DEF="obj_{obj_id}" ', 1)
+            # Find the last Transform — it already has DEF="obj_N" from when it was added
+            # Just ensure the ROUTE targets match the right obj_id
+            # (Transforms written by build_shape_xml already have DEF="obj_{obj_id}")
             updated = content.replace("</Scene>", anim_xml + "  </Scene>")
             with open(SCENE_FILE, "w") as f:
                 f.write(updated)
@@ -1320,6 +1344,8 @@ async def run_agent(req: PromptRequest):
                 f.write(updated)
             return {"status": "success", "message": result["message"]}
 
+        if result["action"] == "help":
+            return {"status": "ok", "message": result["message"]}
         return {"status": "ok", "message": "Try: 'place a red sphere to the left'"}
 
     except Exception as e:
