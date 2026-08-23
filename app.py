@@ -722,25 +722,41 @@ def _build_icosahedron(s):
 # ── dodecahedron ─────────────────────────────────────────────────────────────
 
 def _build_dodecahedron(s):
+    # 20 vertices: 8 cube corners + 4x3 golden-ratio rectangles
     p = (1+math.sqrt(5))/2
     b = 1/p
-    # 20 vertices
     verts = []
     for sx in [-1,1]:
         for sy in [-1,1]:
             for sz in [-1,1]:
-                verts.append((sx*s, sy*s, sz*s))
-    for sv in [-1,1]:
-        for sw in [-1,1]:
-            verts += [(0,sv*p*s,sw*b*s),(sv*b*s,0,sw*p*s),(sv*p*s,sw*b*s,0)]
-    # 12 correct pentagonal faces (verified winding)
+                verts.append((sx*s, sy*s, sz*s))          # 0-7
+    for sy in [-1,1]:
+        for sz in [-1,1]:
+            verts.append((0, sy*b*s, sz*p*s))             # 8-11
+    for sx in [-1,1]:
+        for sy in [-1,1]:
+            verts.append((sx*b*s, sy*p*s, 0))             # 12-15
+    for sx in [-1,1]:
+        for sz in [-1,1]:
+            verts.append((sx*p*s, 0, sz*b*s))             # 16-19
+
+    # 12 pentagonal faces — derived algorithmically from edge adjacency,
+    # windings verified outward-facing (CCW from outside)
     faces = [
-        [0,1,3,2,6],[0,6,4,16,8],[0,8,9,1,2],
-        [1,9,11,3,0],[3,11,10,2,6],[2,10,5,4,6],  # corrected winding
-        [4,5,7,17,16],[5,10,11,7,17],[7,11,9,8,17],
-        [8,16,17,9,1],[16,4,6,2,10],[17,5,10,11,9],  # fill remaining faces
+        [0, 8, 4, 14, 12],
+        [0, 16, 2, 10, 8],
+        [0, 12, 1, 17, 16],
+        [1, 12, 14, 5, 9],
+        [1, 9, 11, 3, 17],
+        [2, 13, 15, 6, 10],
+        [2, 16, 17, 3, 13],
+        [3, 11, 7, 15, 13],
+        [4, 8, 10, 6, 18],
+        [4, 18, 19, 5, 14],
+        [5, 19, 7, 11, 9],
+        [6, 15, 7, 19, 18],
     ]
-    idxs = [" ".join(str(v) for v in face)+" -1" for face in faces]
+    idxs = [" ".join(str(v) for v in face) + " -1" for face in faces]
     return verts, idxs
 
 # ── star (extruded 5-point) ──────────────────────────────────────────────────
