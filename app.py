@@ -1394,7 +1394,7 @@ HTML = """<!DOCTYPE html>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>X3D Agent</title>
-  <script src="https://create3000.github.io/code/x_ite/11.3/x_ite.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/x_ite@16.1.2/dist/x_ite.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -1557,7 +1557,7 @@ HTML = """<!DOCTYPE html>
 
   <div class="main">
     <div class="viewport">
-      <x3d-canvas id="canvas" src="/scene.x3d"></x3d-canvas>
+      <x3d-canvas id="canvas" src="/scene.x3d" contentScale="auto" update="auto"></x3d-canvas>
       <div class="obj-list" id="objList">
         <h3>Scene Objects</h3>
         <div id="objListItems"><em style="color:#444">Empty</em></div>
@@ -1739,10 +1739,18 @@ HTML = """<!DOCTYPE html>
   function reload() {
     const url = '/scene.x3d?t=' + Date.now();
     try {
-      if (canvas.browser) canvas.browser.loadURL(new X3D.MFString(url));
-      else canvas.setAttribute('src', url);
-    } catch(e) { canvas.setAttribute('src', url); }
-    if (objListVisible) setTimeout(refreshObjList, 300);
+      // X_ite 16.x: use loadURL with plain string or setAttribute
+      if (canvas && canvas.browser && canvas.browser.loadURL) {
+        canvas.browser.loadURL(new X3D.MFString(url));
+      } else {
+        canvas.setAttribute('src', url);
+      }
+    } catch(e) {
+      // Fallback: force reload by toggling src attribute
+      canvas.removeAttribute('src');
+      setTimeout(() => canvas.setAttribute('src', url), 10);
+    }
+    if (objListVisible) setTimeout(refreshObjList, 400);
   }
 
   // ── Run prompt ──────────────────────────────────────────────────────────────
