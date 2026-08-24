@@ -434,7 +434,7 @@ def build_x3d(surface_id, param=1.0):
     <NavigationInfo type="EXAMINE ANY"/>
     <DirectionalLight direction="-1 -2 -1" intensity="1.2"/>
     <DirectionalLight direction="1 1 0.5" intensity="0.5" color="0.8 0.85 1"/>
-    <Viewpoint position="0 1.5 8" orientation="0 1 0 0"/>
+    <Viewpoint position="0 0 9" orientation="0 1 0 0"/>
 '''
     # Centering offsets (measured from bounding box centroid)
     if surface_id == "fubini_study":
