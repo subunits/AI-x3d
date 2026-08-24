@@ -436,20 +436,21 @@ def build_x3d(surface_id, param=1.0):
     <DirectionalLight direction="1 1 0.5" intensity="0.5" color="0.8 0.85 1"/>
     <Viewpoint position="0 1.5 8" orientation="0 1 0 0"/>
 '''
+    # Centering offsets (measured from bounding box centroid)
     if surface_id == "fubini_study":
-        xml += f'    <Transform>\n      {surface_fubini_study()}\n{geodesic_grid()}\n    </Transform>\n'
+        xml += f'    <Transform translation="0 0 0">\n      {surface_fubini_study()}\n{geodesic_grid()}\n    </Transform>\n'
     elif surface_id == "poincare":
-        xml += f'    <Transform>\n      {surface_poincare_disk()}\n{poincare_geodesics()}\n    </Transform>\n'
+        xml += f'    <Transform translation="0 -0.13 0">\n      {surface_poincare_disk()}\n{poincare_geodesics()}\n    </Transform>\n'
     elif surface_id == "potential_family":
-        xml += f'    <Transform>\n      {surface_kahler_potential(t=param)}\n    </Transform>\n'
+        xml += f'    <Transform translation="0 -0.11 0">\n      {surface_kahler_potential(t=param)}\n    </Transform>\n'
     elif surface_id == "taub_nut":
-        xml += f'    <Transform>\n      {surface_taub_nut(c=param)}\n    </Transform>\n'
+        xml += f'    <Transform translation="0 0.47 0">\n      {surface_taub_nut(c=param)}\n    </Transform>\n'
     elif surface_id == "eguchi_hanson":
-        xml += f'    <Transform>\n      {surface_eguchi_hanson(a=param)}\n    </Transform>\n'
+        xml += f'    <Transform translation="0 0.59 0">\n      {surface_eguchi_hanson(a=param)}\n    </Transform>\n'
     elif surface_id == "cy_quintic":
-        xml += f'    <Transform>\n      {surface_cy_slice()}\n    </Transform>\n'
+        xml += f'    <Transform translation="-1.72 0 0">\n      {surface_cy_slice()}\n    </Transform>\n'
     elif surface_id == "hk_flat":
-        xml += f'    <Transform>\n      {surface_hk_flat()}\n    </Transform>\n'
+        xml += f'    <Transform translation="0 0 0.5">\n      {surface_hk_flat()}\n    </Transform>\n'
 
     xml += '  </Scene>\n</X3D>\n'
     return xml
@@ -478,12 +479,15 @@ HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Kähler · Hyperkähler Geometry</title>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/x_ite@16.1.2/dist/x_ite.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     :root {
       --void:    #07080c;
       --panel:   #0d0f18;
@@ -498,149 +502,360 @@ HTML = """<!DOCTYPE html>
       --muted:   #4a5568;
       --mono:    'Space Mono', monospace;
       --sans:    'Inter', sans-serif;
+      /* safe areas */
+      --sat: env(safe-area-inset-top,    0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+      --sal: env(safe-area-inset-left,   0px);
+      --sar: env(safe-area-inset-right,  0px);
     }
-    html, body { height: 100%; background: var(--void); color: var(--text);
-      font-family: var(--sans); overflow: hidden; }
 
-    .shell { display: grid; grid-template-columns: 280px 1fr;
-      grid-template-rows: 48px 1fr 120px; height: 100vh; }
+    html, body {
+      height: 100%;
+      background: var(--void);
+      color: var(--text);
+      font-family: var(--sans);
+      /* never let iOS bounce-scroll the shell */
+      position: fixed;
+      width: 100%;
+      overflow: hidden;
+      -webkit-text-size-adjust: 100%;
+    }
 
-    /* Header */
-    header { grid-column: 1 / -1; background: var(--panel);
+    /* ── Shell: stack vertically on portrait, side-by-side on landscape/iPad ── */
+    .shell {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding-top: var(--sat);
+      padding-left: var(--sal);
+      padding-right: var(--sar);
+    }
+
+    /* ── Header ── */
+    header {
+      flex-shrink: 0;
+      background: var(--panel);
       border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; padding: 0 20px; gap: 16px; }
-    .logo { font-family: var(--mono); font-size: 14px; color: var(--accent);
-      letter-spacing: 0.04em; }
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      height: 48px;
+      gap: 12px;
+      z-index: 10;
+    }
+    .logo {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--accent);
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
     .logo span { color: var(--accent2); }
-    .header-tags { display: flex; gap: 8px; margin-left: auto; }
-    .tag { font-family: var(--mono); font-size: 10px; padding: 3px 8px;
-      border-radius: 3px; letter-spacing: 0.06em; }
-    .tag-k  { background: rgba(79,110,247,0.15); color: var(--accent); border: 1px solid rgba(79,110,247,0.3); }
+    .header-tags { display: flex; gap: 6px; margin-left: auto; }
+    .tag {
+      font-family: var(--mono);
+      font-size: 9px;
+      padding: 3px 7px;
+      border-radius: 3px;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    .tag-k  { background: rgba(79,110,247,0.15); color: var(--accent);  border: 1px solid rgba(79,110,247,0.3); }
     .tag-hk { background: rgba(192,132,252,0.15); color: var(--accent2); border: 1px solid rgba(192,132,252,0.3); }
 
-    /* Sidebar */
-    aside { background: var(--panel); border-right: 1px solid var(--border);
-      display: flex; flex-direction: column; overflow: hidden; }
-    .sidebar-label { font-family: var(--mono); font-size: 9px;
-      letter-spacing: 0.12em; color: var(--muted); padding: 14px 16px 6px;
-      text-transform: uppercase; }
-    .surface-list { flex: 1; overflow-y: auto; padding: 4px 8px 8px; }
-    .surface-item { padding: 10px 12px; border-radius: 6px; cursor: pointer;
-      margin-bottom: 2px; transition: background 0.15s; border: 1px solid transparent; }
-    .surface-item:hover { background: rgba(255,255,255,0.04); }
-    .surface-item.active { background: rgba(79,110,247,0.12);
-      border-color: rgba(79,110,247,0.3); }
-    .surface-item.active.hk { background: rgba(192,132,252,0.10);
-      border-color: rgba(192,132,252,0.25); }
-    .surface-name { font-size: 12px; font-weight: 500; color: var(--text); }
-    .surface-cat { font-family: var(--mono); font-size: 9px; color: var(--muted);
+    /* ── Body: viewport + drawer ── */
+    .body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      position: relative;
+    }
+
+    /* ── Viewport ── */
+    .viewport {
+      flex: 1;
+      background: #050609;
+      min-height: 0;
+      position: relative;
+    }
+    x3d-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* ── Bottom drawer (collapsed by default on mobile, expands on tap) ── */
+    .drawer {
+      flex-shrink: 0;
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      max-height: 48vh;
+      padding-bottom: var(--sab);
+    }
+
+    /* Drawer handle + tab bar */
+    .drawer-tabs {
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .dtab {
+      flex: 1;
+      padding: 12px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-align: center;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .dtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .dtab.active.hk { color: var(--accent2); border-bottom-color: var(--accent2); }
+
+    /* Tab panes */
+    .drawer-pane { display: none; flex: 1; overflow: hidden; flex-direction: column; min-height: 0; }
+    .drawer-pane.active { display: flex; }
+
+    /* Surfaces list */
+    .surface-list {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 6px 10px 10px;
+    }
+    .section-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      text-transform: uppercase;
+      padding: 10px 6px 5px;
+    }
+    .surface-item {
+      padding: 12px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 3px;
+      border: 1px solid transparent;
+      min-height: 52px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .surface-item:active { opacity: 0.7; }
+    .surface-item.active { background: rgba(79,110,247,0.12); border-color: rgba(79,110,247,0.3); }
+    .surface-item.active.hk { background: rgba(192,132,252,0.10); border-color: rgba(192,132,252,0.25); }
+    .surface-name { font-size: 13px; font-weight: 500; color: var(--text); }
+    .surface-cat  { font-family: var(--mono); font-size: 9px; color: var(--muted);
       margin-top: 2px; text-transform: uppercase; letter-spacing: 0.08em; }
 
-    .param-section { padding: 12px 16px; border-top: 1px solid var(--border); }
-    .param-label { font-family: var(--mono); font-size: 9px; color: var(--muted);
-      letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
-    .param-row { display: flex; align-items: center; gap: 10px; }
-    input[type=range] { flex: 1; accent-color: var(--accent); }
-    .param-val { font-family: var(--mono); font-size: 11px; color: var(--accent);
-      min-width: 36px; text-align: right; }
+    /* Info pane */
+    .info-pane {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 14px 16px;
+    }
+    .info-row { margin-bottom: 12px; }
+    .info-key {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 4px;
+    }
+    .info-val {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--accent);
+      line-height: 1.4;
+      word-break: break-word;
+    }
+    .info-val.hk      { color: var(--accent2); }
+    .info-val.ricci0  { color: var(--accent3); }
+    .info-desc        { font-size: 13px; color: #94a3b8; line-height: 1.6; margin-top: 12px; }
 
-    /* Colormap legend */
-    .colormap { padding: 10px 16px; border-top: 1px solid var(--border); }
+    /* Param pane */
+    .param-pane {
+      flex: 1;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .param-pane.hidden { display: none; }
+    .param-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .param-row { display: flex; align-items: center; gap: 14px; }
+    input[type=range] {
+      flex: 1;
+      height: 32px;          /* big enough for thumb on iOS */
+      accent-color: var(--accent);
+      cursor: pointer;
+      touch-action: none;
+    }
+    .param-val {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--accent);
+      min-width: 42px;
+      text-align: right;
+    }
+    .param-note {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* Colormap */
+    .cm-section {
+      padding: 10px 16px 12px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
     .cm-label { font-family: var(--mono); font-size: 9px; color: var(--muted);
-      letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
-    .cm-bar { height: 8px; border-radius: 4px; margin-bottom: 4px;
-      background: linear-gradient(to right, var(--cold), var(--accent3), var(--hot)); }
+      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px; }
+    .cm-bar { height: 6px; border-radius: 3px;
+      background: linear-gradient(to right, var(--cold), var(--accent3), var(--hot));
+      margin-bottom: 4px; }
     .cm-ticks { display: flex; justify-content: space-between;
       font-family: var(--mono); font-size: 9px; color: var(--muted); }
 
-    /* Viewport */
-    .viewport { background: #050609; position: relative; }
-    x3d-canvas { width: 100%; height: 100%; display: block; }
+    /* ── Landscape / iPad: side-by-side ── */
+    @media (min-width: 700px) and (orientation: landscape),
+           (min-width: 900px) {
+      .shell    { flex-direction: row; flex-wrap: wrap; }
+      header    { width: 100%; order: -1; }
+      .body     { flex-direction: row; flex: 1; min-height: 0; width: 100%; }
+      .viewport { flex: 1; }
+      .drawer   {
+        width: 300px;
+        max-height: none;
+        height: 100%;
+        border-top: none;
+        border-left: 1px solid var(--border);
+        flex-shrink: 0;
+        padding-bottom: 0;
+        padding-right: var(--sar);
+      }
+      .drawer-tabs { border-bottom: 1px solid var(--border); }
+    }
 
-    /* Bottom info strip */
-    .info-strip { grid-column: 1 / -1; background: var(--panel2);
-      border-top: 1px solid var(--border);
-      display: grid; grid-template-columns: 1fr 1fr 1fr;
-      gap: 1px; overflow: hidden; }
-    .info-cell { padding: 12px 18px; border-right: 1px solid var(--border); }
-    .info-cell:last-child { border-right: none; }
-    .info-key { font-family: var(--mono); font-size: 9px; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px; }
-    .info-val { font-family: var(--mono); font-size: 12px; color: var(--accent); }
-    .info-val.hk { color: var(--accent2); }
-    .info-val.ricci0 { color: var(--accent3); }
-    .info-desc { font-size: 11px; color: #64748b; line-height: 1.5;
-      grid-column: 1 / -1; padding: 10px 18px; border-top: 1px solid var(--border); }
-
-    .info-strip-inner { grid-column: 1 / -1; display: grid;
-      grid-template-columns: 1fr 1fr 1fr; }
-    .desc-row { grid-column: 1 / -1; padding: 8px 18px;
-      border-top: 1px solid var(--border); font-size: 11px;
-      color: #64748b; line-height: 1.5; }
+    /* iPad Pro 12.9" landscape */
+    @media (min-width: 1024px) {
+      .drawer { width: 340px; }
+      .surface-name { font-size: 13px; }
+    }
   </style>
 </head>
 <body>
 <div class="shell">
 
   <header>
-    <div class="logo">Kähler<span> / Hyperkähler</span> Geometry</div>
+    <div class="logo">Kähler<span> / Hyperkähler</span></div>
     <div class="header-tags">
       <span class="tag tag-k">KÄHLER</span>
       <span class="tag tag-hk">HYPERKÄHLER</span>
     </div>
   </header>
 
-  <aside>
-    <div class="sidebar-label">Manifolds</div>
-    <div class="surface-list" id="surfaceList"></div>
+  <div class="body">
+    <div class="viewport">
+      <x3d-canvas id="canvas" contentScale="auto" update="auto"></x3d-canvas>
+    </div>
 
-    <div class="param-section" id="paramSection" style="display:none">
-      <div class="param-label">Parameter <span id="paramName">t</span></div>
-      <div class="param-row">
-        <input type="range" id="paramSlider" min="0.05" max="3" step="0.05" value="1">
-        <span class="param-val" id="paramDisplay">1.00</span>
+    <div class="drawer">
+      <div class="drawer-tabs">
+        <div class="dtab active" id="tab-surfaces" onclick="switchTab('surfaces')">Surfaces</div>
+        <div class="dtab"        id="tab-info"     onclick="switchTab('info')">Info</div>
+        <div class="dtab"        id="tab-param"    onclick="switchTab('param')">Parameter</div>
+      </div>
+
+      <!-- Surfaces pane -->
+      <div class="drawer-pane active" id="pane-surfaces">
+        <div class="surface-list" id="surfaceList"></div>
+        <div class="cm-section">
+          <div class="cm-label">Curvature</div>
+          <div class="cm-bar"></div>
+          <div class="cm-ticks"><span>K &lt; 0</span><span>K = 0</span><span>K &gt; 0</span></div>
+        </div>
+      </div>
+
+      <!-- Info pane -->
+      <div class="drawer-pane" id="pane-info">
+        <div class="info-pane">
+          <div class="info-row">
+            <div class="info-key">Kähler potential φ</div>
+            <div class="info-val" id="infoEq">—</div>
+          </div>
+          <div class="info-row">
+            <div class="info-key">Curvature</div>
+            <div class="info-val" id="infoCurv">—</div>
+          </div>
+          <div class="info-row">
+            <div class="info-key">Holonomy group</div>
+            <div class="info-val" id="infoHol">—</div>
+          </div>
+          <div class="info-desc" id="infoDesc">Select a surface to see its geometry.</div>
+        </div>
+      </div>
+
+      <!-- Parameter pane -->
+      <div class="drawer-pane" id="pane-param">
+        <div class="param-pane" id="paramPane">
+          <div class="param-label">Parameter: <span id="paramName">t</span></div>
+          <div class="param-row">
+            <input type="range" id="paramSlider" min="0.05" max="3" step="0.05" value="1">
+            <span class="param-val" id="paramDisplay">1.00</span>
+          </div>
+          <div class="param-note" id="paramNote">Drag to morph the surface.</div>
+        </div>
+        <div class="param-pane hidden" id="noParam">
+          <div class="param-label">No parameter</div>
+          <div class="param-note">This surface has no adjustable parameter.<br>Switch to a surface like Kähler Potential Family, Taub-NUT, or Eguchi-Hanson.</div>
+        </div>
       </div>
     </div>
-
-    <div class="colormap">
-      <div class="cm-label">Curvature map</div>
-      <div class="cm-bar"></div>
-      <div class="cm-ticks"><span>K &lt; 0</span><span>K = 0</span><span>K &gt; 0</span></div>
-    </div>
-  </aside>
-
-  <div class="viewport">
-    <x3d-canvas id="canvas" contentScale="auto" update="auto"></x3d-canvas>
   </div>
 
-  <div class="info-strip">
-    <div class="info-strip-inner">
-      <div class="info-cell">
-        <div class="info-key">Kähler potential φ</div>
-        <div class="info-val" id="infoEq">—</div>
-      </div>
-      <div class="info-cell">
-        <div class="info-key">Curvature</div>
-        <div class="info-val" id="infoCurv">—</div>
-      </div>
-      <div class="info-cell">
-        <div class="info-key">Holonomy group</div>
-        <div class="info-val" id="infoHol">—</div>
-      </div>
-    </div>
-    <div class="desc-row" id="infoDesc">Select a surface to explore its geometry.</div>
-  </div>
 </div>
 
 <script>
 const SURFACES = {
-  fubini_study:    { label:"CP¹ — Fubini-Study",  category:"kähler",       eq:"φ = log(1 + |z|²)",            curv:"K = +1",                  hol:"U(1)",       param:null,  desc:"The complex projective line CP¹ ≅ S² with the Fubini-Study metric. Positive constant holomorphic sectional curvature. Geodesics are great circles; holomorphic curves are points." },
-  poincare:        { label:"Poincaré Disk — H²",   category:"kähler",       eq:"φ = −log(1 − |z|²)",           curv:"K = −1",                  hol:"U(1)",       param:null,  desc:"The hyperbolic plane with its unique complete Kähler metric. Negative constant curvature. Geodesics are circular arcs perpendicular to the boundary circle." },
-  potential_family:{ label:"Kähler Potential Family",category:"kähler",     eq:"φ_t = t⁻¹ log(1 + t|z|²)",    curv:"K(z) = t·(1+t|z|²)⁻²",   hol:"U(1)",       param:"t",   desc:"A one-parameter deformation between flat ℂ (t=0), Fubini-Study (t=1), and the hyperbolic disk (t<0). Height encodes the potential. Drag the slider to morph the geometry." },
-  taub_nut:        { label:"Taub-NUT Space",         category:"hyperkähler", eq:"V(r) = 1 + c/r",               curv:"Ric = 0",                  hol:"Sp(1)≅SU(2)", param:"c",  desc:"Complete hyperkähler 4-manifold with NUT charge c and U(1) isometry. The orbit space ℝ³ is visualized with metric distortion from the NUT potential. Increasing c strengthens the gravitational instanton." },
-  eguchi_hanson:   { label:"Eguchi-Hanson Space",    category:"hyperkähler", eq:"f² = 1 − (a/r)⁴",             curv:"Ric=0, |Rm|²∝(a/r)⁸",   hol:"Sp(1)",       param:"a",  desc:"The simplest ALE gravitational instanton — a hyperkähler metric on T*CP¹. A 2-sphere 'bolt' lives at r=a where the U(1) fiber degenerates. Curvature is concentrated at the bolt and decays as r⁻⁸." },
-  cy_quintic:      { label:"Calabi-Yau Quintic (slice)",category:"hyperkähler",eq:"Σᵢ zᵢ⁵ = 0 ⊂ CP⁴",         curv:"Ric = 0",                  hol:"SU(3)",      param:null,  desc:"Real 2-slice of the Fermat quintic — the most-studied compact CY threefold in string theory (mirror symmetry, Hodge numbers h¹¹=1, h²¹=101). This section shows branch structure of the holomorphic 3-form Ω." },
-  hk_flat:         { label:"ℝ⁴ — Flat Hyperkähler",  category:"hyperkähler", eq:"ωI=dx¹∧dx², ωJ=dx¹∧dx³, ωK=dx²∧dx³", curv:"K = 0", hol:"Sp(1)⊂SO(4)",  param:null,  desc:"The flat hyperkähler manifold ℝ⁴ ≅ ℍ. Three complex structures I, J, K satisfy IJ=K (quaternion algebra). Each plane shows one Kähler form. The starting point for Kronheimer's ALE classification." },
+  fubini_study:    { label:"CP¹ — Fubini-Study",       category:"kähler",       eq:"φ = log(1 + |z|²)",                      curv:"K = +1",                   hol:"U(1)",        param:null, paramNote:null,
+    desc:"The complex projective line CP¹ ≅ S² with the Fubini-Study metric. Positive constant holomorphic sectional curvature. Geodesics are great circles." },
+  poincare:        { label:"Poincaré Disk — H²",        category:"kähler",       eq:"φ = −log(1 − |z|²)",                     curv:"K = −1",                   hol:"U(1)",        param:null, paramNote:null,
+    desc:"The hyperbolic plane with its unique complete Kähler metric. Negative constant curvature. Geodesics are circular arcs perpendicular to the boundary." },
+  potential_family:{ label:"Kähler Potential Family",   category:"kähler",       eq:"φ_t = t⁻¹ log(1 + t|z|²)",              curv:"K(z) = t·(1+t|z|²)⁻²",   hol:"U(1)",        param:"t",  paramNote:"t=0: flat ℂ · t=1: Fubini-Study · t≫1: concentrated curvature",
+    desc:"A one-parameter deformation between flat ℂ (t→0) and CP¹ (t=1). Height encodes the potential; color encodes position-dependent curvature K(z)." },
+  taub_nut:        { label:"Taub-NUT Space",             category:"hyperkähler",  eq:"V(r) = 1 + c/r",                         curv:"Ric = 0",                  hol:"Sp(1)≅SU(2)", param:"c",  paramNote:"c = NUT charge — larger c = stronger gravitational instanton",
+    desc:"Complete hyperkähler 4-manifold with NUT charge c. The orbit space ℝ³ is visualized with distortion from V(r). Ricci-flat; color encodes the NUT potential." },
+  eguchi_hanson:   { label:"Eguchi-Hanson Space",        category:"hyperkähler",  eq:"f² = 1 − (a/r)⁴",                       curv:"Ric=0, |Rm|²∝(a/r)⁸",   hol:"Sp(1)",       param:"a",  paramNote:"a = bolt radius — curvature concentrates at the S² bolt at r = a",
+    desc:"The simplest ALE gravitational instanton — a hyperkähler metric on T*CP¹. Contains a 2-sphere bolt at r=a. Curvature decays as r⁻⁸ away from the bolt." },
+  cy_quintic:      { label:"Calabi-Yau Quintic (slice)", category:"hyperkähler",  eq:"Σᵢ zᵢ⁵ = 0 ⊂ CP⁴",                    curv:"Ric = 0",                  hol:"SU(3)",       param:null, paramNote:null,
+    desc:"Real 2-slice of the Fermat quintic — the most-studied compact CY threefold in string theory (h¹¹=1, h²¹=101). Color encodes |Ω|², the holomorphic 3-form." },
+  hk_flat:         { label:"ℝ⁴ — Flat Hyperkähler",     category:"hyperkähler",  eq:"ωI=dx¹∧dx², ωJ=dx¹∧dx³, ωK=dx²∧dx³", curv:"K = 0",                    hol:"Sp(1)⊂SO(4)", param:null, paramNote:null,
+    desc:"The flat hyperkähler manifold ℝ⁴ ≅ ℍ. Three complex structures I, J, K satisfy IJ=K (quaternion algebra). Each colored plane represents one Kähler form." },
 };
 
 let currentSurface = 'fubini_study';
@@ -649,7 +864,7 @@ const canvas = document.getElementById('canvas');
 
 function loadSurface(id, param) {
   currentSurface = id;
-  currentParam   = param || 1.0;
+  currentParam   = (param != null) ? param : 1.0;
   const url = `/scene/${id}?param=${currentParam}&t=${Date.now()}`;
   try {
     if (canvas.browser && canvas.browser.loadURL) {
@@ -672,36 +887,49 @@ function updateInfo(id) {
   document.getElementById('infoCurv').textContent = s.curv;
   document.getElementById('infoHol').textContent  = s.hol;
   document.getElementById('infoDesc').textContent = s.desc;
-  // Curvature color
   const cv = document.getElementById('infoCurv');
-  cv.className = 'info-val' + (s.curv.includes('Ric = 0') ? ' ricci0' : s.category === 'hyperkähler' ? ' hk' : '');
-  // Param slider
-  const ps = document.getElementById('paramSection');
+  cv.className = 'info-val' + (s.curv.includes('Ric = 0') || s.curv === 'K = 0' ? ' ricci0' : s.category === 'hyperkähler' ? ' hk' : '');
+
+  // Parameter pane
   if (s.param) {
-    ps.style.display = '';
+    document.getElementById('paramPane').classList.remove('hidden');
+    document.getElementById('noParam').classList.add('hidden');
     document.getElementById('paramName').textContent = s.param;
+    if (s.paramNote) document.getElementById('paramNote').textContent = s.paramNote;
   } else {
-    ps.style.display = 'none';
+    document.getElementById('paramPane').classList.add('hidden');
+    document.getElementById('noParam').classList.remove('hidden');
   }
+
+  // Update tab styling
+  const infoTab = document.getElementById('tab-info');
+  infoTab.classList.toggle('hk', s.category === 'hyperkähler');
 }
 
 function updateSidebarActive(id) {
   document.querySelectorAll('.surface-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.id === id);
-    el.classList.toggle('hk', el.dataset.id === id && SURFACES[id].category === 'hyperkähler');
+    const isActive = el.dataset.id === id;
+    el.classList.toggle('active', isActive);
+    el.classList.toggle('hk', isActive && SURFACES[id].category === 'hyperkähler');
   });
 }
 
-// Build sidebar
+function switchTab(name) {
+  ['surfaces','info','param'].forEach(t => {
+    document.getElementById('tab-'  + t).classList.toggle('active', t === name);
+    document.getElementById('pane-' + t).classList.toggle('active', t === name);
+  });
+}
+
+// Build surface list
 const list = document.getElementById('surfaceList');
 let lastCat = null;
 Object.entries(SURFACES).forEach(([id, s]) => {
   if (s.category !== lastCat) {
     lastCat = s.category;
     const lbl = document.createElement('div');
-    lbl.className = 'sidebar-label';
+    lbl.className = 'section-label';
     lbl.textContent = s.category === 'kähler' ? 'Kähler' : 'Hyperkähler';
-    lbl.style.paddingTop = '10px';
     list.appendChild(lbl);
   }
   const item = document.createElement('div');
@@ -710,8 +938,11 @@ Object.entries(SURFACES).forEach(([id, s]) => {
   item.innerHTML = `<div class="surface-name">${s.label}</div>
     <div class="surface-cat">${s.category} · ${s.hol}</div>`;
   item.onclick = () => {
-    const param = SURFACES[id].param ? currentParam : 1.0;
-    loadSurface(id, param);
+    loadSurface(id, currentParam);
+    // On mobile auto-switch to viewport after selection
+    if (window.innerWidth < 700) {
+      // small nudge so user sees the load started
+    }
   };
   list.appendChild(item);
 });
@@ -720,21 +951,22 @@ Object.entries(SURFACES).forEach(([id, s]) => {
 const slider  = document.getElementById('paramSlider');
 const display = document.getElementById('paramDisplay');
 let debounce;
-slider.oninput = () => {
+slider.addEventListener('input', () => {
   currentParam = parseFloat(slider.value);
   display.textContent = currentParam.toFixed(2);
   clearTimeout(debounce);
-  debounce = setTimeout(() => loadSurface(currentSurface, currentParam), 120);
-};
+  debounce = setTimeout(() => {
+    if (SURFACES[currentSurface].param) loadSurface(currentSurface, currentParam);
+  }, 150);
+});
 
-// Load default
+// Load default on ready
 window.addEventListener('load', () => {
   setTimeout(() => loadSurface('fubini_study'), 300);
 });
 </script>
 </body>
-</html>
-"""
+</html>"""
 
 if __name__ == "__main__":
     import uvicorn
