@@ -649,6 +649,13 @@ HTML = """<!DOCTYPE html>
       padding-bottom: var(--sab);
     }
 
+    .drawer-body {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
     /* Drawer handle + tab bar */
     .drawer-tabs {
       display: flex;
@@ -678,8 +685,19 @@ HTML = """<!DOCTYPE html>
     .dtab.active.hk { color: var(--accent2); border-bottom-color: var(--accent2); }
 
     /* Tab panes */
-    .drawer-pane { display: none; flex: 1; overflow: hidden; flex-direction: column; min-height: 0; }
-    .drawer-pane.active { display: flex; }
+    .drawer-pane {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .drawer-pane.active {
+      visibility: visible;
+      pointer-events: auto;
+    }
 
     /* Surfaces list */
     .surface-list {
@@ -844,6 +862,7 @@ HTML = """<!DOCTYPE html>
         <div class="dtab"        id="tab-param"    onclick="switchTab('param')">Parameter</div>
       </div>
 
+      <div class="drawer-body">
       <!-- Surfaces pane -->
       <div class="drawer-pane active" id="pane-surfaces">
         <div class="surface-list" id="surfaceList"></div>
@@ -888,6 +907,7 @@ HTML = """<!DOCTYPE html>
           <div class="param-note">This surface has no adjustable parameter.<br>Switch to a surface like Kähler Potential Family, Taub-NUT, or Eguchi-Hanson.</div>
         </div>
       </div>
+      </div><!-- /drawer-body -->
     </div>
   </div>
 
