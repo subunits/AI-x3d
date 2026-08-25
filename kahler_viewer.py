@@ -78,8 +78,8 @@ def surface_fubini_study(N=60, scale=2.0):
     """
     CP¹ with Fubini-Study metric — stereographic projection of S².
     Kähler potential: φ = log(1 + |z|²)
-    Gaussian curvature: K = +1 everywhere (after normalization to radius 1)
-    Color: uniform orange (positive curvature)
+    Gaussian curvature: K = +1 everywhere (unit sphere, radius=1 mathematically;
+    displayed at scale=2 for visibility)
     """
     pts, colors = [], []
     for i in range(N):
@@ -149,7 +149,7 @@ def surface_kahler_potential(N=55, t=1.0, scale=2.5):
             else:
                 phi = r2
                 K = 0.0
-            y = min(max(phi * 0.4 - 0.5, -2.0), 3.0)
+            y = min(max(phi * 0.5, -2.0), 3.5)
             pts.append((x, y, z))
             colors.append(curvature_color(K * 4, -1.5, 1.5))
     geo = grid_mesh(pts, N, N, colors)
@@ -157,33 +157,39 @@ def surface_kahler_potential(N=55, t=1.0, scale=2.5):
     return f'<Shape>{geo}{m}</Shape>\n'
 
 
-def surface_taub_nut(N=48, c=1.0, scale=1.8):
+def surface_taub_nut(N=40, c=1.0, scale=1.6):
     """
-    Taub-NUT space — a complete hyperkähler 4-manifold with U(1) isometry.
-    The metric is: ds² = V(r)(dr² + r²dΩ²) + V(r)⁻¹(dψ + A)²
-    where V(r) = 1 + c/r (NUT charge c).
-    
-    Visualization: project onto 3D base (r,θ,φ) with radial metric factor V(r)
-    encoded in surface height. Color = NUT potential V(r).
+    Taub-NUT space — hyperkähler 4-manifold with U(1) isometry.
+    V(r) = 1 + c/r  (NUT charge c).
+
+    Visualization: concentric spherical shells at discrete r values,
+    each warped by sqrt(V(r)) and colored by the NUT potential.
+    Inner shells are small (high V) → orange; outer shells large (V→1) → green.
     """
-    pts, colors = [], []
-    for i in range(N):
-        for j in range(N):
-            theta = math.pi * i / (N - 1)
-            phi_a = 2 * math.pi * j / (N - 1)
-            r = 0.3 + 3.5 * (i / (N - 1)) ** 1.5   # radial coordinate
-            V = 1.0 + c / max(r, 0.01)
-            # warp the sphere by V
-            R = r * math.sqrt(V) * scale / 3.0
-            x = R * math.sin(theta) * math.cos(phi_a)
-            y = R * math.cos(theta)
-            z = R * math.sin(theta) * math.sin(phi_a)
-            pts.append((x, y, z))
-            # Color encodes NUT potential (high near origin = high curvature)
-            colors.append(curvature_color(V - 1.0, 0.0, 3.0))
-    geo = grid_mesh(pts, N, N, colors)
-    m = '<Appearance><Material transparency="0.05"/></Appearance>'
-    return f'<Shape>{geo}{m}</Shape>\n'
+    xml = ""
+    n_shells = 7
+    n_u, n_v = 28, 16
+    r_values = [0.3 + 3.5 * (k / (n_shells - 1)) ** 1.4 for k in range(n_shells)]
+
+    for r in r_values:
+        V = 1.0 + c / max(r, 0.01)
+        R = r * math.sqrt(V) * scale / 3.5
+        transparency = 0.15 + 0.55 * (r / 3.8)   # inner shells more opaque
+        col = curvature_color(V - 1.0, 0.0, 3.5)
+        pts, colors = [], []
+        for i in range(n_u):
+            for j in range(n_v):
+                theta = math.pi * j / (n_v - 1)
+                phi_a = 2 * math.pi * i / (n_u - 1)
+                x = R * math.sin(theta) * math.cos(phi_a)
+                y = R * math.cos(theta)
+                z = R * math.sin(theta) * math.sin(phi_a)
+                pts.append((x, y, z))
+                colors.append(col)
+        geo = grid_mesh(pts, n_u, n_v, colors)
+        m = f'<Appearance><Material transparency="{transparency:.2f}"/></Appearance>'
+        xml += f'<Shape>{geo}{m}</Shape>\n'
+    return xml
 
 
 def surface_eguchi_hanson(N=52, a=1.0, scale=1.5):
@@ -209,7 +215,7 @@ def surface_eguchi_hanson(N=52, a=1.0, scale=1.5):
             
             x = R_base * math.cos(phi_a)
             z = R_base * math.sin(phi_a)
-            y = (r - a) * scale / 3.0 - 1.5
+            y = (r - a) * scale / 3.0
             
             pts.append((x, y, z))
             # Curvature concentrated at bolt
@@ -250,7 +256,7 @@ def surface_cy_slice(N=58, phase=0.0, scale=1.8):
                 continue
             w_arg = math.atan2(w_i, w_r)
             r2 = w_mod ** 0.2
-            theta2 = (w_arg + 2 * math.pi * round(phase)) / 5.0  # pick branch
+            theta2 = w_arg / 5.0  # principal branch, consistent
             z2r = r2 * math.cos(theta2)
             z2i = r2 * math.sin(theta2)
             x = z2r * scale
@@ -265,49 +271,66 @@ def surface_cy_slice(N=58, phase=0.0, scale=1.8):
     return f'<Shape>{geo}{m}</Shape>\n'
 
 
-def surface_hk_flat(N=24, scale=2.0):
+def surface_hk_flat(N=32, scale=2.2):
     """
-    Flat ℝ⁴ with its hyperkähler structure — the simplest hyperkähler manifold.
-    Three complex structures: I, J, K acting on ℝ⁴ ≅ ℍ (quaternions).
-    
-    Visualization: project ℝ⁴ → ℝ³ by fixing one quaternion coordinate.
-    Draw the three 2-planes corresponding to I,J,K as colored discs.
-    Show J-holomorphic and K-holomorphic curves as grid lines.
+    Flat ℝ⁴ ≅ ℍ with hyperkähler structure.
+    Three Kähler forms: ωI = dx¹∧dx², ωJ = dx¹∧dx³, ωK = dx²∧dx³.
+    Visualized as three mutually orthogonal planes through the origin in ℝ³,
+    each labeled by one complex structure I, J, K.
+    Grid lines on each plane show the corresponding holomorphic foliation.
     """
     xml = ""
-    # Three 2-planes for I, J, K — displayed as colored flat grids
+    # Three orthogonal planes: XY (I), XZ (J), YZ (K)
+    # Each defined by two orthogonal basis vectors in ℝ³
     planes = [
-        # I: (e1,e2) plane — project to (x,y,0)
-        ("I-plane", (0.31, 0.43, 0.97), [((-1,0,0),(1,0,0),(1,0,1),(-1,0,1))]),
-        # J: (e1,e3) plane — rotated 60°
-        ("J-plane", (0.75, 0.25, 0.97), [((-1,0.87,0),(1,0.87,0),(1,0.87,1),(-1,0.87,1))]),
-        # K: (e2,e3) plane — rotated 120°
-        ("K-plane", (0.20, 0.83, 0.60), [((-1,-0.87,0),(1,-0.87,0),(1,-0.87,1),(-1,-0.87,1))]),
+        # ωI = dx¹∧dx²: the XY-plane
+        ((1,0,0), (0,1,0), (0.31, 0.43, 0.97), "I"),   # blue
+        # ωJ = dx¹∧dx³: the XZ-plane
+        ((1,0,0), (0,0,1), (0.75, 0.25, 0.92), "J"),   # violet
+        # ωK = dx²∧dx³: the YZ-plane
+        ((0,1,0), (0,0,1), (0.20, 0.83, 0.55), "K"),   # green
     ]
-    for label, col, quad in planes:
-        r,g,b = col
-        pts_list = []
-        idxs = []
+    for (e1, e2, col, label) in planes:
+        r, g, b = col
+        pts_list, idxs = [], []
         for i in range(N):
             for j in range(N):
                 u = -scale + 2*scale*i/(N-1)
                 v = -scale + 2*scale*j/(N-1)
-                a,b2,c,d = quad[0]
-                x = a[0]*u + b2[0]*v
-                y = a[1]*u + b2[1]*v
-                z = a[2]*u + b2[2]*v
-                pts_list.append((x*0.7, y*0.7, z*0.7 - 0.5))
+                x = e1[0]*u + e2[0]*v
+                y = e1[1]*u + e2[1]*v
+                z = e1[2]*u + e2[2]*v
+                pts_list.append((x, y, z))
         for i in range(N-1):
             for j in range(N-1):
-                aa = i*N+j; bb=aa+1; cc=(i+1)*N+j+1; dd=(i+1)*N+j
+                aa = i*N+j; bb = aa+1; cc = (i+1)*N+j+1; dd = (i+1)*N+j
                 idxs.append(f"{aa} {bb} {cc} {dd} -1")
         pts_str = " ".join(f"{p[0]:.3f} {p[1]:.3f} {p[2]:.3f}" for p in pts_list)
         idx_str = " ".join(idxs)
         geo = (f'<IndexedFaceSet coordIndex="{idx_str}" solid="false" creaseAngle="0">'
                f'<Coordinate point="{pts_str}"/></IndexedFaceSet>')
         m = (f'<Appearance><Material diffuseColor="{r:.2f} {g:.2f} {b:.2f}" '
-             f'transparency="0.55"/></Appearance>')
+             f'transparency="0.50"/></Appearance>')
         xml += f'<Shape>{geo}{m}</Shape>\n'
+
+        # Grid lines on this plane
+        n_lines = 8
+        line_mat = (f'<Appearance><Material emissiveColor="{r:.2f} {g:.2f} {b:.2f}" '
+                    f'transparency="0.3"/></Appearance>')
+        for k in range(n_lines + 1):
+            t = -scale + 2*scale*k/n_lines
+            # lines parallel to e2
+            p0 = (e1[0]*t + e2[0]*(-scale), e1[1]*t + e2[1]*(-scale), e1[2]*t + e2[2]*(-scale))
+            p1 = (e1[0]*t + e2[0]*( scale), e1[1]*t + e2[1]*( scale), e1[2]*t + e2[2]*( scale))
+            pts_str2 = f"{p0[0]:.3f} {p0[1]:.3f} {p0[2]:.3f} {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}"
+            xml += (f'<Shape><IndexedLineSet coordIndex="0 1 -1">'
+                    f'<Coordinate point="{pts_str2}"/></IndexedLineSet>{line_mat}</Shape>\n')
+            # lines parallel to e1
+            p0 = (e1[0]*(-scale) + e2[0]*t, e1[1]*(-scale) + e2[1]*t, e1[2]*(-scale) + e2[2]*t)
+            p1 = (e1[0]*( scale) + e2[0]*t, e1[1]*( scale) + e2[1]*t, e1[2]*( scale) + e2[2]*t)
+            pts_str2 = f"{p0[0]:.3f} {p0[1]:.3f} {p0[2]:.3f} {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}"
+            xml += (f'<Shape><IndexedLineSet coordIndex="0 1 -1">'
+                    f'<Coordinate point="{pts_str2}"/></IndexedLineSet>{line_mat}</Shape>\n')
     return xml
 
 
@@ -421,6 +444,22 @@ SURFACES = {
 }
 
 
+def _centroid(xml_fragment):
+    """Compute mean of all coordinate points in an XML fragment."""
+    coords = re.findall(r'point="([^"]+)"', xml_fragment)
+    pts = []
+    for c in coords:
+        nums = c.split()
+        for i in range(0, len(nums) - 2, 3):
+            try: pts.append((float(nums[i]), float(nums[i+1]), float(nums[i+2])))
+            except: pass
+    if not pts:
+        return (0.0, 0.0, 0.0)
+    return (sum(p[0] for p in pts)/len(pts),
+            sum(p[1] for p in pts)/len(pts),
+            sum(p[2] for p in pts)/len(pts))
+
+
 def build_x3d(surface_id, param=1.0):
     s = SURFACES.get(surface_id, SURFACES["fubini_study"])
     cat = s["category"]
@@ -436,21 +475,26 @@ def build_x3d(surface_id, param=1.0):
     <DirectionalLight direction="1 1 0.5" intensity="0.5" color="0.8 0.85 1"/>
     <Viewpoint position="0 0 9" orientation="0 1 0 0"/>
 '''
-    # Centering offsets (measured from bounding box centroid)
+    # Build surface geometry, then auto-center by negating its centroid
     if surface_id == "fubini_study":
-        xml += f'    <Transform translation="0 0 0">\n      {surface_fubini_study()}\n{geodesic_grid()}\n    </Transform>\n'
+        geo = surface_fubini_study() + geodesic_grid()
     elif surface_id == "poincare":
-        xml += f'    <Transform translation="0 -0.13 0">\n      {surface_poincare_disk()}\n{poincare_geodesics()}\n    </Transform>\n'
+        geo = surface_poincare_disk() + poincare_geodesics()
     elif surface_id == "potential_family":
-        xml += f'    <Transform translation="0 -0.11 0">\n      {surface_kahler_potential(t=param)}\n    </Transform>\n'
+        geo = surface_kahler_potential(t=param)
     elif surface_id == "taub_nut":
-        xml += f'    <Transform translation="0 0.47 0">\n      {surface_taub_nut(c=param)}\n    </Transform>\n'
+        geo = surface_taub_nut(c=param)
     elif surface_id == "eguchi_hanson":
-        xml += f'    <Transform translation="0 0.59 0">\n      {surface_eguchi_hanson(a=param)}\n    </Transform>\n'
+        geo = surface_eguchi_hanson(a=param)
     elif surface_id == "cy_quintic":
-        xml += f'    <Transform translation="-1.72 0 0">\n      {surface_cy_slice()}\n    </Transform>\n'
+        geo = surface_cy_slice()
     elif surface_id == "hk_flat":
-        xml += f'    <Transform translation="0 0 0.5">\n      {surface_hk_flat()}\n    </Transform>\n'
+        geo = surface_hk_flat()
+    else:
+        geo = ""
+
+    cx, cy, cz = _centroid(geo)
+    xml += f'    <Transform translation="{-cx:.3f} {-cy:.3f} {-cz:.3f}">\n{geo}    </Transform>\n'
 
     xml += '  </Scene>\n</X3D>\n'
     return xml
