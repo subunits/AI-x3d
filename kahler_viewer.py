@@ -52,7 +52,7 @@ def ils(pts, col):
     """IndexedLineSet for grid lines."""
     pts_str = " ".join(f"{p[0]:.4f} {p[1]:.4f} {p[2]:.4f}" for p in pts)
     idx_str = " ".join(str(i) for i in range(len(pts))) + " -1"
-    r,g,b = col
+    r, g, b = col
     return (f'<Shape><IndexedLineSet coordIndex="{idx_str}">'
             f'<Coordinate point="{pts_str}"/></IndexedLineSet>'
             f'<Appearance><Material emissiveColor="{r:.2f} {g:.2f} {b:.2f}"/></Appearance>'
@@ -72,15 +72,10 @@ def grid_mesh(pts, Nu, Nv, colors=None):
     return ifs(pts, idxs, colors)
 
 
-# ── Surface generators ─────────────────────────────────────────────────────────
+# ── Advanced Surface Generators & Fiber Metrics ────────────────────────────────
 
 def surface_fubini_study(N=60, scale=2.0):
-    """
-    CP¹ with Fubini-Study metric — stereographic projection of S².
-    Kähler potential: φ = log(1 + |z|²)
-    Gaussian curvature: K = +1 everywhere (unit sphere, radius=1 mathematically;
-    displayed at scale=2 for visibility)
-    """
+    """CP¹ with Fubini-Study metric — stereographic projection of S²."""
     pts, colors = [], []
     for i in range(N):
         for j in range(N):
@@ -97,12 +92,7 @@ def surface_fubini_study(N=60, scale=2.0):
 
 
 def surface_poincare_disk(N=55, R=2.5):
-    """
-    Poincaré disk model of H² — hyperbolic plane.
-    Kähler potential: φ = -log(1 - |z|²)
-    Gaussian curvature: K = -1 everywhere
-    Visualized as the Beltrami-Klein embedding in 3D (height = hyperbolic area element)
-    """
+    """Poincaré disk model of H² — hyperbolic plane."""
     pts, colors = [], []
     lim = 0.92
     for i in range(N):
@@ -124,9 +114,7 @@ def surface_poincare_disk(N=55, R=2.5):
 
 
 def surface_kahler_potential(N=55, t=1.0, scale=2.5):
-    """
-    Family of Kähler potentials: φ_t = (1/t) log(1 + t|z|²)
-    """
+    """Family of Kähler potentials: φ_t = (1/t) log(1 + t|z|²)"""
     pts, colors = [], []
     lim = scale
     for i in range(N):
@@ -283,7 +271,7 @@ def surface_hk_flat(N=32, scale=2.2):
 def geodesic_grid(N=24, R=2.0, col=(0.22, 0.55, 0.97)):
     xml = ""
     n_lines = 12
-    r,g,b = col
+    r, g, b = col
     mat_str = f'<Appearance><Material emissiveColor="{r:.2f} {g:.2f} {b:.2f}" transparency="0.3"/></Appearance>'
     for k in range(n_lines):
         pts = []
@@ -326,7 +314,7 @@ def poincare_geodesics(N=32, R=2.5):
     return xml
 
 
-# ── X3D scene builder ─────────────────────────────────────────────────────────
+# ── Metadata & Configuration Dictionary ────────────────────────────────────────
 
 SURFACES = {
     "fubini_study": {
@@ -335,7 +323,7 @@ SURFACES = {
         "equation": "φ = log(1 + |z|²)",
         "curvature": "K = +1",
         "holonomy": "U(1)",
-        "description": "The complex projective line CP¹ ≅ S² with the Fubini-Study metric.",
+        "description": "The complex projective line CP¹ ≅ S² equipped with the standard Fubini-Study metric.",
     },
     "poincare": {
         "label": "Poincaré Disk — H²",
@@ -343,7 +331,7 @@ SURFACES = {
         "equation": "φ = −log(1 − |z|²)",
         "curvature": "K = −1",
         "holonomy": "U(1)",
-        "description": "The hyperbolic plane with its unique complete Kähler metric.",
+        "description": "The hyperbolic plane model exhibiting constant negative sectional curvature.",
     },
     "potential_family": {
         "label": "Kähler Potential Family",
@@ -351,7 +339,7 @@ SURFACES = {
         "equation": "φ_t = t⁻¹ log(1 + t|z|²)",
         "curvature": "K(z) = t(1 + t|z|²)⁻²",
         "holonomy": "U(1)",
-        "description": "A one-parameter family of Kähler metrics on ℂ.",
+        "description": "A parameterized deformation family interpolating elliptic and hyperbolic geometries.",
     },
     "taub_nut": {
         "label": "Taub-NUT Space",
@@ -359,7 +347,7 @@ SURFACES = {
         "equation": "ds² = V(dr²+r²dΩ²) + V⁻¹(dψ+A)²",
         "curvature": "Ric = 0",
         "holonomy": "Sp(1) ≅ SU(2)",
-        "description": "A complete hyperkähler 4-manifold with NUT charge c.",
+        "description": "A non-trivial complete hyperkähler four-manifold featuring self-dual gravitational fields.",
     },
     "eguchi_hanson": {
         "label": "Eguchi-Hanson Space",
@@ -367,7 +355,7 @@ SURFACES = {
         "equation": "ds² = (1−(a/r)⁴)⁻¹dr² + r²/4 Σσᵢ²",
         "curvature": "Ric = 0, |Rm|² ~ (a/r)⁸",
         "holonomy": "Sp(1)",
-        "description": "The simplest ALE gravitational instanton.",
+        "description": "Asymptotically locally flat (ALF) gravitational instanton removing conical singularities.",
     },
     "cy_quintic": {
         "label": "Calabi-Yau Quintic (slice)",
@@ -375,7 +363,7 @@ SURFACES = {
         "equation": "z₀⁵+z₁⁵+z₂⁵+z₃⁵+z₄⁵ = 0 ⊂ CP⁴",
         "curvature": "Ric = 0",
         "holonomy": "SU(3)",
-        "description": "A real 2-dimensional slice of the Fermat quintic Calabi-Yau threefold.",
+        "description": "Cross-sectional slice of the Fermat quintic threefold admitting Ricci-flat metrics.",
     },
     "hk_flat": {
         "label": "ℝ⁴ — Flat Hyperkähler",
@@ -383,7 +371,7 @@ SURFACES = {
         "equation": "ωI = dx¹∧dx² + dx³∧dx⁴",
         "curvature": "K = 0",
         "holonomy": "Sp(1) ⊂ SO(4)",
-        "description": "The simplest hyperkähler manifold: ℝ⁴ ≅ ℍ with its flat metric.",
+        "description": "Flat hyperkähler space modeled as quaternionic affine space ℍ with triple complex structures.",
     },
 }
 
@@ -394,8 +382,10 @@ def _centroid(xml_fragment):
     for c in coords:
         nums = c.split()
         for i in range(0, len(nums) - 2, 3):
-            try: pts.append((float(nums[i]), float(nums[i+1]), float(nums[i+2])))
-            except: pass
+            try:
+                pts.append((float(nums[i]), float(nums[i+1]), float(nums[i+2])))
+            except:
+                pass
     if not pts:
         return (0.0, 0.0, 0.0)
     return (sum(p[0] for p in pts)/len(pts),
@@ -441,7 +431,7 @@ def build_x3d(surface_id, param=1.0):
     return xml
 
 
-# ── API ────────────────────────────────────────────────────────────────────────
+# ── FastAPI Endpoints ──────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -458,7 +448,7 @@ async def list_surfaces():
     return JSONResponse({"surfaces": {k: {**v} for k, v in SURFACES.items()}})
 
 
-# ── HTML ───────────────────────────────────────────────────────────────────────
+# ── Frontend HTML/CSS/JS Payload ───────────────────────────────────────────────
 
 HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -887,9 +877,9 @@ HTML = """<!DOCTYPE html>
       });
 
       // Configure parameter slider per surface
-      const paramPane = document.getElementById('tab-param');
+      const paramTab = document.getElementById('tab-param');
       if (['potential_family', 'taub_nut', 'eguchi_hanson'].includes(id)) {
-        paramPane.style.display = 'flex';
+        paramTab.style.display = 'flex';
         const slider = document.getElementById('paramSlider');
         if (id === 'potential_family') {
           slider.min = '-0.9'; slider.max = '3.0'; slider.step = '0.1'; slider.value = '1.0';
@@ -907,7 +897,7 @@ HTML = """<!DOCTYPE html>
         currentParam = parseFloat(slider.value);
         document.getElementById('paramVal').innerText = currentParam;
       } else {
-        paramPane.style.display = 'none';
+        paramTab.style.display = 'none';
         if (document.getElementById('pane-param').classList.contains('active')) {
           switchTab('surfaces');
         }
@@ -967,4 +957,3 @@ HTML = """<!DOCTYPE html>
 </script>
 </body>
 </html>
-"""
