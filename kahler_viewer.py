@@ -603,7 +603,13 @@ HTML = """<!DOCTYPE html>
       border-radius: 3px;
       letter-spacing: 0.06em;
       white-space: nowrap;
+      cursor: pointer;
+      opacity: 0.45;
+      transition: opacity 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
     }
+    .tag.active { opacity: 1.0; }
     .tag-k  { background: rgba(79,110,247,0.15); color: var(--accent);  border: 1px solid rgba(79,110,247,0.3); }
     .tag-hk { background: rgba(192,132,252,0.15); color: var(--accent2); border: 1px solid rgba(192,132,252,0.3); }
 
@@ -818,8 +824,8 @@ HTML = """<!DOCTYPE html>
   <header>
     <div class="logo">Kähler<span> / Hyperkähler</span></div>
     <div class="header-tags">
-      <span class="tag tag-k">KÄHLER</span>
-      <span class="tag tag-hk">HYPERKÄHLER</span>
+      <span class="tag tag-k active" id="filterK"  onclick="toggleFilter('kähler')">KÄHLER</span>
+      <span class="tag tag-hk active" id="filterHK" onclick="toggleFilter('hyperkähler')">HYPERKÄHLER</span>
     </div>
   </header>
 
@@ -965,6 +971,37 @@ function switchTab(name) {
   });
 }
 
+// ── Filter state ──────────────────────────────────────────────────────────────
+const filterState = { 'kähler': true, 'hyperkähler': true };
+
+function toggleFilter(cat) {
+  // If both active and user taps one — isolate that one
+  // If only one active and user taps it — restore both
+  const bothOn = filterState['kähler'] && filterState['hyperkähler'];
+  if (bothOn) {
+    filterState['kähler']       = (cat === 'kähler');
+    filterState['hyperkähler']  = (cat === 'hyperkähler');
+  } else {
+    // restore both
+    filterState['kähler']       = true;
+    filterState['hyperkähler']  = true;
+  }
+  document.getElementById('filterK') .classList.toggle('active', filterState['kähler']);
+  document.getElementById('filterHK').classList.toggle('active', filterState['hyperkähler']);
+  applyFilter();
+}
+
+function applyFilter() {
+  document.querySelectorAll('.surface-item').forEach(el => {
+    const cat = SURFACES[el.dataset.id]?.category;
+    el.style.display = filterState[cat] ? '' : 'none';
+  });
+  document.querySelectorAll('.section-label').forEach(el => {
+    const cat = el.dataset.cat;
+    if (cat) el.style.display = filterState[cat] ? '' : 'none';
+  });
+}
+
 // Build surface list
 const list = document.getElementById('surfaceList');
 let lastCat = null;
@@ -973,6 +1010,7 @@ Object.entries(SURFACES).forEach(([id, s]) => {
     lastCat = s.category;
     const lbl = document.createElement('div');
     lbl.className = 'section-label';
+    lbl.dataset.cat = s.category;
     lbl.textContent = s.category === 'kähler' ? 'Kähler' : 'Hyperkähler';
     list.appendChild(lbl);
   }
