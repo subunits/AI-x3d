@@ -2,7 +2,7 @@
 Kähler / Hyperkähler Geometry Viewer
 Standalone FastAPI app — serves an X3D interactive explorer of differential-geometric surfaces.
 """
-import math, os
+import math, os, re
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
