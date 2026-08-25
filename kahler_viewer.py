@@ -423,7 +423,7 @@ SURFACES = {
         "equation": "ds² = (1−(a/r)⁴)⁻¹dr² + r²/4 Σσᵢ²",
         "curvature": "Ric = 0, |Rm|² ~ (a/r)⁸",
         "holonomy": "Sp(1)",
-        "description": "The simplest ALE (asymptotically locally Euclidean) gravitational instanton. A hyperkähler metric on T*CP¹. Contains a 2-sphere 'bolt' at r=a where the U(1) fiber degenerates. Curvature concentrated at the bolt.",
+        "description": "The simplest ALE gravitational instanton. A hyperkähler metric on T*CP¹. Contains a 2-sphere 'bolt' at r=a where the U(1) fiber degenerates. Curvature concentrated at the bolt.",
     },
     "cy_quintic": {
         "label": "Calabi-Yau Quintic (slice)",
@@ -716,6 +716,11 @@ HTML = """<!DOCTYPE html>
     .surface-cat  { font-family: var(--mono); font-size: 9px; color: var(--muted);
       margin-top: 2px; text-transform: uppercase; letter-spacing: 0.08em; }
 
+    /* Utility hidden class to prevent layout jumping */
+    .surface-item.hidden, .section-label.hidden {
+      display: none !important;
+    }
+
     /* Info pane */
     .info-pane {
       flex: 1;
@@ -978,14 +983,11 @@ function switchTab(name) {
 const filterState = { 'kähler': true, 'hyperkähler': true };
 
 function toggleFilter(cat) {
-  // If both active and user taps one — isolate that one
-  // If only one active and user taps it — restore both
   const bothOn = filterState['kähler'] && filterState['hyperkähler'];
   if (bothOn) {
     filterState['kähler']       = (cat === 'kähler');
     filterState['hyperkähler']  = (cat === 'hyperkähler');
   } else {
-    // restore both
     filterState['kähler']       = true;
     filterState['hyperkähler']  = true;
   }
@@ -997,11 +999,13 @@ function toggleFilter(cat) {
 function applyFilter() {
   document.querySelectorAll('.surface-item').forEach(el => {
     const cat = SURFACES[el.dataset.id]?.category;
-    el.style.display = filterState[cat] ? '' : 'none';
+    el.classList.toggle('hidden', !filterState[cat]);
   });
   document.querySelectorAll('.section-label').forEach(el => {
     const cat = el.dataset.cat;
-    if (cat) el.style.display = filterState[cat] ? '' : 'none';
+    if (cat) {
+      el.classList.toggle('hidden', !filterState[cat]);
+    }
   });
 }
 
@@ -1024,10 +1028,6 @@ Object.entries(SURFACES).forEach(([id, s]) => {
     <div class="surface-cat">${s.category} · ${s.hol}</div>`;
   item.onclick = () => {
     loadSurface(id, currentParam);
-    // On mobile auto-switch to viewport after selection
-    if (window.innerWidth < 700) {
-      // small nudge so user sees the load started
-    }
   };
   list.appendChild(item);
 });
