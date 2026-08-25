@@ -90,7 +90,6 @@ def surface_fubini_study(N=60, scale=2.0):
             y = math.cos(v) * scale
             z = math.sin(v) * math.sin(u) * scale
             pts.append((x, y, z))
-            # K = +1 everywhere on S²
             colors.append(curvature_color(1.0, -1.5, 1.5))
     geo = grid_mesh(pts, N, N, colors)
     m = '<Appearance><Material transparency="0.05"/></Appearance>'
@@ -105,22 +104,19 @@ def surface_poincare_disk(N=55, R=2.5):
     Visualized as the Beltrami-Klein embedding in 3D (height = hyperbolic area element)
     """
     pts, colors = [], []
-    lim = 0.92   # stay inside disk
+    lim = 0.92
     for i in range(N):
         for j in range(N):
-            # polar grid
             r = lim * i / (N - 1)
             theta = 2 * math.pi * j / (N - 1)
             x = r * math.cos(theta) * R
             z = r * math.sin(theta) * R
-            # height = Kähler potential derivative (metric factor)
             if r < 0.999:
                 phi = -math.log(max(1e-8, 1 - r * r))
                 y = min(phi * 0.3, 3.0)
             else:
                 y = 3.0
             pts.append((x, y, z))
-            # K = -1 everywhere
             colors.append(curvature_color(-1.0, -1.5, 1.5))
     geo = grid_mesh(pts, N, N, colors)
     m = '<Appearance><Material transparency="0.05"/></Appearance>'
@@ -130,11 +126,6 @@ def surface_poincare_disk(N=55, R=2.5):
 def surface_kahler_potential(N=55, t=1.0, scale=2.5):
     """
     Family of Kähler potentials: φ_t = (1/t) log(1 + t|z|²)
-    t→0: flat C (φ = |z|²)
-    t=1: Fubini-Study
-    t→-1: Poincaré disk
-    Visualized as height field over R².
-    Colors encode Gaussian curvature K = t / (1 + t|z|²)².
     """
     pts, colors = [], []
     lim = scale
@@ -158,14 +149,7 @@ def surface_kahler_potential(N=55, t=1.0, scale=2.5):
 
 
 def surface_taub_nut(N=40, c=1.0, scale=1.6):
-    """
-    Taub-NUT space — hyperkähler 4-manifold with U(1) isometry.
-    V(r) = 1 + c/r  (NUT charge c).
-
-    Visualization: concentric spherical shells at discrete r values,
-    each warped by sqrt(V(r)) and colored by the NUT potential.
-    Inner shells are small (high V) → orange; outer shells large (V→1) → green.
-    """
+    """Taub-NUT space — hyperkähler 4-manifold with U(1) isometry."""
     xml = ""
     n_shells = 7
     n_u, n_v = 28, 16
@@ -174,7 +158,7 @@ def surface_taub_nut(N=40, c=1.0, scale=1.6):
     for r in r_values:
         V = 1.0 + c / max(r, 0.01)
         R = r * math.sqrt(V) * scale / 3.5
-        transparency = 0.15 + 0.55 * (r / 3.8)   # inner shells more opaque
+        transparency = 0.15 + 0.55 * (r / 3.8)
         col = curvature_color(V - 1.0, 0.0, 3.5)
         pts, colors = [], []
         for i in range(n_u):
@@ -193,32 +177,19 @@ def surface_taub_nut(N=40, c=1.0, scale=1.6):
 
 
 def surface_eguchi_hanson(N=52, a=1.0, scale=1.5):
-    """
-    Eguchi-Hanson space — the simplest ALE (asymptotically locally Euclidean) 
-    hyperkähler 4-manifold. Metric:
-    ds² = (1 - (a/r)⁴)⁻¹ dr² + r²/4 [(σ₁² + σ₂²) + (1-(a/r)⁴)σ₃²]
-    
-    Has a 2-sphere (the 'bolt') at r=a where the U(1) fiber degenerates.
-    Visualized as a warped S² that opens into a trumpet as r→∞.
-    Color = |Riemann|² ∝ (a/r)⁴ — concentrated at the bolt.
-    """
+    """Eguchi-Hanson space — hyperkähler 4-manifold."""
     pts, colors = [], []
     for i in range(N):
         for j in range(N):
             t = i / (N - 1)
-            r = a + 4.0 * t ** 1.2   # r ranges from a to a+4
+            r = a + 4.0 * t ** 1.2
             phi_a = 2 * math.pi * j / (N - 1)
-            
-            # metric factor for the S² base
             f2 = max(0.0, 1.0 - (a / max(r, 1e-6)) ** 4)
             R_base = r * math.sqrt(f2) * scale / 3.0
-            
             x = R_base * math.cos(phi_a)
             z = R_base * math.sin(phi_a)
             y = (r - a) * scale / 3.0
-            
             pts.append((x, y, z))
-            # Curvature concentrated at bolt
             curv = 12 * a**4 / max(r**6, 1e-6)
             colors.append(curvature_color(curv * 2 - 0.5, -0.5, 2.0))
     geo = grid_mesh(pts, N, N, colors)
@@ -227,16 +198,7 @@ def surface_eguchi_hanson(N=52, a=1.0, scale=1.5):
 
 
 def surface_cy_slice(N=58, phase=0.0, scale=1.8):
-    """
-    Calabi-Yau quintic cross-section.
-    The quintic CY3 is defined in CP⁴ by: z₀⁵+z₁⁵+z₂⁵+z₃⁵+z₄⁵ = ψ z₀z₁z₂z₃z₄
-    
-    Real 2-slice: set z₃=z₄=0, parameterize (z₀:z₁:z₂) with z₀=1.
-    Then: 1 + z₁⁵ + z₂⁵ = 0.
-    Parameterize z₁=r·e^(iθ), find z₂ = (-1-z₁⁵)^(1/5).
-    Plot Re(z₂), Im(z₂) as (x,z) and Re(z₁) as height.
-    Color = |dω| (holomorphic 2-form magnitude proxy).
-    """
+    """Calabi-Yau quintic cross-section."""
     pts, colors = [], []
     for i in range(N):
         for j in range(N):
@@ -244,7 +206,6 @@ def surface_cy_slice(N=58, phase=0.0, scale=1.8):
             theta1 = 2 * math.pi * j / (N - 1) + phase
             z1r = r1 * math.cos(theta1)
             z1i = r1 * math.sin(theta1)
-            # z2^5 = -1 - z1^5
             z1_5r = r1**5 * math.cos(5 * theta1)
             z1_5i = r1**5 * math.sin(5 * theta1)
             w_r = -1 - z1_5r
@@ -256,14 +217,13 @@ def surface_cy_slice(N=58, phase=0.0, scale=1.8):
                 continue
             w_arg = math.atan2(w_i, w_r)
             r2 = w_mod ** 0.2
-            theta2 = w_arg / 5.0  # principal branch, consistent
+            theta2 = w_arg / 5.0
             z2r = r2 * math.cos(theta2)
             z2i = r2 * math.sin(theta2)
             x = z2r * scale
             z_pos = z2i * scale
             y = z1r * scale
             pts.append((x, y, z_pos))
-            # |Ω|² proxy: 1/(r1·r2)
             omega_mag = 1.0 / max(r1 * r2, 0.1)
             colors.append(curvature_color(omega_mag - 2, -1.5, 1.5))
     geo = grid_mesh(pts, N, N, colors)
@@ -272,23 +232,12 @@ def surface_cy_slice(N=58, phase=0.0, scale=1.8):
 
 
 def surface_hk_flat(N=32, scale=2.2):
-    """
-    Flat ℝ⁴ ≅ ℍ with hyperkähler structure.
-    Three Kähler forms: ωI = dx¹∧dx², ωJ = dx¹∧dx³, ωK = dx²∧dx³.
-    Visualized as three mutually orthogonal planes through the origin in ℝ³,
-    each labeled by one complex structure I, J, K.
-    Grid lines on each plane show the corresponding holomorphic foliation.
-    """
+    """Flat ℝ⁴ ≅ ℍ with hyperkähler structure."""
     xml = ""
-    # Three orthogonal planes: XY (I), XZ (J), YZ (K)
-    # Each defined by two orthogonal basis vectors in ℝ³
     planes = [
-        # ωI = dx¹∧dx²: the XY-plane
-        ((1,0,0), (0,1,0), (0.31, 0.43, 0.97), "I"),   # blue
-        # ωJ = dx¹∧dx³: the XZ-plane
-        ((1,0,0), (0,0,1), (0.75, 0.25, 0.92), "J"),   # violet
-        # ωK = dx²∧dx³: the YZ-plane
-        ((0,1,0), (0,0,1), (0.20, 0.83, 0.55), "K"),   # green
+        ((1,0,0), (0,1,0), (0.31, 0.43, 0.97), "I"),
+        ((1,0,0), (0,0,1), (0.75, 0.25, 0.92), "J"),
+        ((0,1,0), (0,0,1), (0.20, 0.83, 0.55), "K"),
     ]
     for (e1, e2, col, label) in planes:
         r, g, b = col
@@ -313,19 +262,16 @@ def surface_hk_flat(N=32, scale=2.2):
              f'transparency="0.50"/></Appearance>')
         xml += f'<Shape>{geo}{m}</Shape>\n'
 
-        # Grid lines on this plane
         n_lines = 8
         line_mat = (f'<Appearance><Material emissiveColor="{r:.2f} {g:.2f} {b:.2f}" '
                     f'transparency="0.3"/></Appearance>')
         for k in range(n_lines + 1):
             t = -scale + 2*scale*k/n_lines
-            # lines parallel to e2
             p0 = (e1[0]*t + e2[0]*(-scale), e1[1]*t + e2[1]*(-scale), e1[2]*t + e2[2]*(-scale))
             p1 = (e1[0]*t + e2[0]*( scale), e1[1]*t + e2[1]*( scale), e1[2]*t + e2[2]*( scale))
             pts_str2 = f"{p0[0]:.3f} {p0[1]:.3f} {p0[2]:.3f} {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}"
             xml += (f'<Shape><IndexedLineSet coordIndex="0 1 -1">'
                     f'<Coordinate point="{pts_str2}"/></IndexedLineSet>{line_mat}</Shape>\n')
-            # lines parallel to e1
             p0 = (e1[0]*(-scale) + e2[0]*t, e1[1]*(-scale) + e2[1]*t, e1[2]*(-scale) + e2[2]*t)
             p1 = (e1[0]*( scale) + e2[0]*t, e1[1]*( scale) + e2[1]*t, e1[2]*( scale) + e2[2]*t)
             pts_str2 = f"{p0[0]:.3f} {p0[1]:.3f} {p0[2]:.3f} {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}"
@@ -335,7 +281,6 @@ def surface_hk_flat(N=32, scale=2.2):
 
 
 def geodesic_grid(N=24, R=2.0, col=(0.22, 0.55, 0.97)):
-    """Draw geodesic grid lines on a sphere (representing CP¹ holomorphic curves)."""
     xml = ""
     n_lines = 12
     r,g,b = col
@@ -358,7 +303,6 @@ def geodesic_grid(N=24, R=2.0, col=(0.22, 0.55, 0.97)):
 
 
 def poincare_geodesics(N=32, R=2.5):
-    """Draw hyperbolic geodesics in the Poincaré disk model."""
     xml = ""
     mat_str = '<Appearance><Material emissiveColor="0.22 0.70 0.97" transparency="0.4"/></Appearance>'
     n_geo = 8
@@ -391,7 +335,7 @@ SURFACES = {
         "equation": "φ = log(1 + |z|²)",
         "curvature": "K = +1",
         "holonomy": "U(1)",
-        "description": "The complex projective line CP¹ ≅ S² with the Fubini-Study metric. The Kähler form ω = i∂∂̄φ gives a round sphere. Positive constant holomorphic sectional curvature.",
+        "description": "The complex projective line CP¹ ≅ S² with the Fubini-Study metric.",
     },
     "poincare": {
         "label": "Poincaré Disk — H²",
@@ -399,7 +343,7 @@ SURFACES = {
         "equation": "φ = −log(1 − |z|²)",
         "curvature": "K = −1",
         "holonomy": "U(1)",
-        "description": "The hyperbolic plane with its unique (up to scale) complete Kähler metric. Geodesics are circular arcs meeting the boundary at right angles. Negative constant curvature.",
+        "description": "The hyperbolic plane with its unique complete Kähler metric.",
     },
     "potential_family": {
         "label": "Kähler Potential Family",
@@ -407,7 +351,7 @@ SURFACES = {
         "equation": "φ_t = t⁻¹ log(1 + t|z|²)",
         "curvature": "K(z) = t(1 + t|z|²)⁻²",
         "holonomy": "U(1)",
-        "description": "A one-parameter family of Kähler metrics on ℂ. At t=0: flat Euclidean. At t→+∞: approaches CP¹. At t→−1: approaches the Poincaré disk. Height encodes the potential φ.",
+        "description": "A one-parameter family of Kähler metrics on ℂ.",
     },
     "taub_nut": {
         "label": "Taub-NUT Space",
@@ -415,7 +359,7 @@ SURFACES = {
         "equation": "ds² = V(dr²+r²dΩ²) + V⁻¹(dψ+A)²",
         "curvature": "Ric = 0",
         "holonomy": "Sp(1) ≅ SU(2)",
-        "description": "A complete hyperkähler 4-manifold with NUT charge c and U(1) isometry. V(r) = 1 + c/r. Ricci-flat. The fiber S¹ over the asymptotic ℝ³ base is visualized via metric distortion. Color encodes the NUT potential.",
+        "description": "A complete hyperkähler 4-manifold with NUT charge c.",
     },
     "eguchi_hanson": {
         "label": "Eguchi-Hanson Space",
@@ -423,7 +367,7 @@ SURFACES = {
         "equation": "ds² = (1−(a/r)⁴)⁻¹dr² + r²/4 Σσᵢ²",
         "curvature": "Ric = 0, |Rm|² ~ (a/r)⁸",
         "holonomy": "Sp(1)",
-        "description": "The simplest ALE gravitational instanton. A hyperkähler metric on T*CP¹. Contains a 2-sphere 'bolt' at r=a where the U(1) fiber degenerates. Curvature concentrated at the bolt.",
+        "description": "The simplest ALE gravitational instanton.",
     },
     "cy_quintic": {
         "label": "Calabi-Yau Quintic (slice)",
@@ -431,7 +375,7 @@ SURFACES = {
         "equation": "z₀⁵+z₁⁵+z₂⁵+z₃⁵+z₄⁵ = 0 ⊂ CP⁴",
         "curvature": "Ric = 0",
         "holonomy": "SU(3)",
-        "description": "A real 2-dimensional slice of the Fermat quintic Calabi-Yau threefold in CP⁴. The quintic CY3 is the most-studied compact Calabi-Yau manifold in string theory. This cross-section shows the branch structure of the holomorphic form Ω.",
+        "description": "A real 2-dimensional slice of the Fermat quintic Calabi-Yau threefold.",
     },
     "hk_flat": {
         "label": "ℝ⁴ — Flat Hyperkähler",
@@ -439,13 +383,12 @@ SURFACES = {
         "equation": "ωI = dx¹∧dx² + dx³∧dx⁴",
         "curvature": "K = 0",
         "holonomy": "Sp(1) ⊂ SO(4)",
-        "description": "The simplest hyperkähler manifold: ℝ⁴ ≅ ℍ with its flat metric. Three complex structures I, J, K satisfy IJ=K (quaternion relations). Each colored plane represents one complex structure acting on tangent space.",
+        "description": "The simplest hyperkähler manifold: ℝ⁴ ≅ ℍ with its flat metric.",
     },
 }
 
 
 def _centroid(xml_fragment):
-    """Compute mean of all coordinate points in an XML fragment."""
     coords = re.findall(r'point="([^"]+)"', xml_fragment)
     pts = []
     for c in coords:
@@ -475,7 +418,6 @@ def build_x3d(surface_id, param=1.0):
     <DirectionalLight direction="1 1 0.5" intensity="0.5" color="0.8 0.85 1"/>
     <Viewpoint position="0 0 9" orientation="0 1 0 0"/>
 '''
-    # Build surface geometry, then auto-center by negating its centroid
     if surface_id == "fubini_study":
         geo = surface_fubini_study() + geodesic_grid()
     elif surface_id == "poincare":
@@ -495,7 +437,6 @@ def build_x3d(surface_id, param=1.0):
 
     cx, cy, cz = _centroid(geo)
     xml += f'    <Transform translation="{-cx:.3f} {-cy:.3f} {-cz:.3f}">\n{geo}    </Transform>\n'
-
     xml += '  </Scene>\n</X3D>\n'
     return xml
 
@@ -546,7 +487,6 @@ HTML = """<!DOCTYPE html>
       --muted:   #4a5568;
       --mono:    'Space Mono', monospace;
       --sans:    'Inter', sans-serif;
-      /* safe areas */
       --sat: env(safe-area-inset-top,    0px);
       --sab: env(safe-area-inset-bottom, 0px);
       --sal: env(safe-area-inset-left,   0px);
@@ -554,28 +494,28 @@ HTML = """<!DOCTYPE html>
     }
 
     html, body {
-      height: 100%;
+      height: 100vh;
+      height: 100dvh;
       background: var(--void);
       color: var(--text);
       font-family: var(--sans);
-      /* never let iOS bounce-scroll the shell */
       position: fixed;
-      width: 100%;
+      width: 100vw;
       overflow: hidden;
       -webkit-text-size-adjust: 100%;
     }
 
-    /* ── Shell: stack vertically on portrait, side-by-side on landscape/iPad ── */
     .shell {
       display: flex;
       flex-direction: column;
       height: 100%;
+      width: 100%;
+      overflow: hidden;
       padding-top: var(--sat);
       padding-left: var(--sal);
       padding-right: var(--sar);
     }
 
-    /* ── Header ── */
     header {
       flex-shrink: 0;
       background: var(--panel);
@@ -613,32 +553,30 @@ HTML = """<!DOCTYPE html>
     .tag-k  { background: rgba(79,110,247,0.15); color: var(--accent);  border: 1px solid rgba(79,110,247,0.3); }
     .tag-hk { background: rgba(192,132,252,0.15); color: var(--accent2); border: 1px solid rgba(192,132,252,0.3); }
 
-    /* ── Body: viewport + drawer ── */
     .body {
       flex: 1;
       display: flex;
       flex-direction: column;
       min-height: 0;
       position: relative;
+      overflow: hidden;
     }
 
-    /* ── Viewport ── */
     .viewport {
       flex: 1;
       background: #050609;
       min-height: 0;
       position: relative;
-      overflow: hidden;   /* contain X_ite's DOM mutations */
+      overflow: hidden;
     }
     x3d-canvas {
       position: absolute;
-      inset: 0;           /* top/right/bottom/left: 0 — fills viewport exactly */
+      inset: 0;
       width: 100%;
       height: 100%;
       display: block;
     }
 
-    /* ── Bottom drawer (collapsed by default on mobile, expands on tap) ── */
     .drawer {
       flex-shrink: 0;
       background: var(--panel);
@@ -646,10 +584,11 @@ HTML = """<!DOCTYPE html>
       display: flex;
       flex-direction: column;
       max-height: 48vh;
+      min-height: 0;
       padding-bottom: var(--sab);
+      overflow: hidden;
     }
 
-    /* Drawer handle + tab bar */
     .drawer-tabs {
       display: flex;
       align-items: center;
@@ -677,17 +616,23 @@ HTML = """<!DOCTYPE html>
     .dtab.active { color: var(--accent); border-bottom-color: var(--accent); }
     .dtab.active.hk { color: var(--accent2); border-bottom-color: var(--accent2); }
 
-    /* Tab panes */
-    .drawer-pane { display: none; flex: 1; overflow: hidden; flex-direction: column; min-height: 0; }
+    .drawer-pane {
+      display: none;
+      flex: 1;
+      overflow: hidden;
+      flex-direction: column;
+      min-height: 0;
+    }
     .drawer-pane.active { display: flex; }
 
-    /* Surfaces list */
-    .surface-list {
+    .surface-list, .info-pane, .param-pane {
       flex: 1;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
-      padding: 6px 10px 10px;
+      min-height: 0;
     }
+
+    .surface-list { padding: 6px 10px 10px; }
     .section-label {
       font-family: var(--mono);
       font-size: 9px;
@@ -716,18 +661,9 @@ HTML = """<!DOCTYPE html>
     .surface-cat  { font-family: var(--mono); font-size: 9px; color: var(--muted);
       margin-top: 2px; text-transform: uppercase; letter-spacing: 0.08em; }
 
-    /* Utility hidden class to prevent layout jumping */
-    .surface-item.hidden, .section-label.hidden {
-      display: none !important;
-    }
+    .surface-item.hidden, .section-label.hidden { display: none !important; }
 
-    /* Info pane */
-    .info-pane {
-      flex: 1;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-      padding: 14px 16px;
-    }
+    .info-pane { padding: 14px 16px; }
     .info-row { margin-bottom: 12px; }
     .info-key {
       font-family: var(--mono);
@@ -744,13 +680,11 @@ HTML = """<!DOCTYPE html>
       line-height: 1.4;
       word-break: break-word;
     }
-    .info-val.hk      { color: var(--accent2); }
-    .info-val.ricci0  { color: var(--accent3); }
-    .info-desc        { font-size: 13px; color: #94a3b8; line-height: 1.6; margin-top: 12px; }
+    .info-val.hk       { color: var(--accent2); }
+    .info-val.ricci0   { color: var(--accent3); }
+    .info-desc         { font-size: 13px; color: #94a3b8; line-height: 1.6; margin-top: 12px; }
 
-    /* Param pane */
     .param-pane {
-      flex: 1;
       padding: 18px 20px;
       display: flex;
       flex-direction: column;
@@ -767,7 +701,7 @@ HTML = """<!DOCTYPE html>
     .param-row { display: flex; align-items: center; gap: 14px; }
     input[type=range] {
       flex: 1;
-      height: 32px;          /* big enough for thumb on iOS */
+      height: 32px;
       accent-color: var(--accent);
       cursor: pointer;
       touch-action: none;
@@ -785,7 +719,6 @@ HTML = """<!DOCTYPE html>
       line-height: 1.5;
     }
 
-    /* Colormap */
     .cm-section {
       padding: 10px 16px 12px;
       border-top: 1px solid var(--border);
@@ -799,7 +732,6 @@ HTML = """<!DOCTYPE html>
     .cm-ticks { display: flex; justify-content: space-between;
       font-family: var(--mono); font-size: 9px; color: var(--muted); }
 
-    /* ── Landscape / iPad: side-by-side ── */
     @media (min-width: 700px) and (orientation: landscape),
            (min-width: 900px) {
       .shell    { flex-direction: row; flex-wrap: wrap; }
@@ -819,7 +751,6 @@ HTML = """<!DOCTYPE html>
       .drawer-tabs { border-bottom: 1px solid var(--border); }
     }
 
-    /* iPad Pro 12.9" landscape */
     @media (min-width: 1024px) {
       .drawer { width: 340px; }
       .surface-name { font-size: 13px; }
@@ -871,188 +802,169 @@ HTML = """<!DOCTYPE html>
             <div class="info-val" id="infoCurv">—</div>
           </div>
           <div class="info-row">
-            <div class="info-key">Holonomy group</div>
+            <div class="info-key">Holonomy</div>
             <div class="info-val" id="infoHol">—</div>
           </div>
-          <div class="info-desc" id="infoDesc">Select a surface to see its geometry.</div>
+          <div class="info-desc" id="infoDesc">—</div>
         </div>
       </div>
 
       <!-- Parameter pane -->
       <div class="drawer-pane" id="pane-param">
-        <div class="param-pane" id="paramPane">
-          <div class="param-label">Parameter: <span id="paramName">t</span></div>
+        <div class="param-pane" id="paramPaneContent">
+          <div class="param-label" id="paramLabel">Parameter</div>
           <div class="param-row">
-            <input type="range" id="paramSlider" min="0.05" max="3" step="0.05" value="1">
-            <span class="param-val" id="paramDisplay">1.00</span>
+            <input type="range" id="paramSlider" min="0.1" max="3.0" step="0.1" value="1.0" oninput="updateParam(this.value)">
+            <div class="param-val" id="paramVal">1.0</div>
           </div>
-          <div class="param-note" id="paramNote">Drag to morph the surface.</div>
-        </div>
-        <div class="param-pane hidden" id="noParam">
-          <div class="param-label">No parameter</div>
-          <div class="param-note">This surface has no adjustable parameter.<br>Switch to a surface like Kähler Potential Family, Taub-NUT, or Eguchi-Hanson.</div>
+          <div class="param-note" id="paramNote">Adjusts metric deformation or parameter scaling.</div>
         </div>
       </div>
+
     </div>
   </div>
 
 </div>
 
 <script>
-const SURFACES = {
-  fubini_study:    { label:"CP¹ — Fubini-Study",       category:"kähler",       eq:"φ = log(1 + |z|²)",                      curv:"K = +1",                   hol:"U(1)",        param:null, paramNote:null,
-    desc:"The complex projective line CP¹ ≅ S² with the Fubini-Study metric. Positive constant holomorphic sectional curvature. Geodesics are great circles." },
-  poincare:        { label:"Poincaré Disk — H²",        category:"kähler",       eq:"φ = −log(1 − |z|²)",                     curv:"K = −1",                   hol:"U(1)",        param:null, paramNote:null,
-    desc:"The hyperbolic plane with its unique complete Kähler metric. Negative constant curvature. Geodesics are circular arcs perpendicular to the boundary." },
-  potential_family:{ label:"Kähler Potential Family",   category:"kähler",       eq:"φ_t = t⁻¹ log(1 + t|z|²)",              curv:"K(z) = t·(1+t|z|²)⁻²",   hol:"U(1)",        param:"t",  paramNote:"t=0: flat ℂ · t=1: Fubini-Study · t≫1: concentrated curvature",
-    desc:"A one-parameter deformation between flat ℂ (t→0) and CP¹ (t=1). Height encodes the potential; color encodes position-dependent curvature K(z)." },
-  taub_nut:        { label:"Taub-NUT Space",             category:"hyperkähler",  eq:"V(r) = 1 + c/r",                         curv:"Ric = 0",                  hol:"Sp(1)≅SU(2)", param:"c",  paramNote:"c = NUT charge — larger c = stronger gravitational instanton",
-    desc:"Complete hyperkähler 4-manifold with NUT charge c. The orbit space ℝ³ is visualized with distortion from V(r). Ricci-flat; color encodes the NUT potential." },
-  eguchi_hanson:   { label:"Eguchi-Hanson Space",        category:"hyperkähler",  eq:"f² = 1 − (a/r)⁴",                       curv:"Ric=0, |Rm|²∝(a/r)⁸",   hol:"Sp(1)",       param:"a",  paramNote:"a = bolt radius — curvature concentrates at the S² bolt at r = a",
-    desc:"The simplest ALE gravitational instanton — a hyperkähler metric on T*CP¹. Contains a 2-sphere bolt at r=a. Curvature decays as r⁻⁸ away from the bolt." },
-  cy_quintic:      { label:"Calabi-Yau Quintic (slice)", category:"hyperkähler",  eq:"Σᵢ zᵢ⁵ = 0 ⊂ CP⁴",                    curv:"Ric = 0",                  hol:"SU(3)",       param:null, paramNote:null,
-    desc:"Real 2-slice of the Fermat quintic — the most-studied compact CY threefold in string theory (h¹¹=1, h²¹=101). Color encodes |Ω|², the holomorphic 3-form." },
-  hk_flat:         { label:"ℝ⁴ — Flat Hyperkähler",     category:"hyperkähler",  eq:"ωI=dx¹∧dx², ωJ=dx¹∧dx³, ωK=dx²∧dx³", curv:"K = 0",                    hol:"Sp(1)⊂SO(4)", param:null, paramNote:null,
-    desc:"The flat hyperkähler manifold ℝ⁴ ≅ ℍ. Three complex structures I, J, K satisfy IJ=K (quaternion algebra). Each colored plane represents one Kähler form." },
-};
+  let surfacesData = {};
+  let currentSurface = 'fubini_study';
+  let activeFilters = { 'kähler': true, 'hyperkähler': true };
+  let currentParam = 1.0;
 
-let currentSurface = 'fubini_study';
-let currentParam   = 1.0;
-const canvas = document.getElementById('canvas');
+  async function init() {
+    const res = await fetch('/surfaces');
+    const data = await res.json();
+    surfacesData = data.surfaces;
+    renderSurfacesList();
+    selectSurface('fubini_study', false);
+  }
 
-function loadSurface(id, param) {
-  currentSurface = id;
-  currentParam   = (param != null) ? param : 1.0;
-  const url = `/scene/${id}?param=${currentParam}&t=${Date.now()}`;
-  try {
-    if (canvas.browser && canvas.browser.loadURL) {
-      canvas.browser.loadURL(new X3D.MFString(url));
-    } else {
-      canvas.setAttribute('src', url);
+  function renderSurfacesList() {
+    const listEl = document.getElementById('surfaceList');
+    listEl.innerHTML = '';
+    
+    let currentCat = '';
+    for (const [id, s] of Object.entries(surfacesData)) {
+      if (s.category !== currentCat) {
+        currentCat = s.category;
+        const header = document.createElement('div');
+        header.className = `section-label ${!activeFilters[currentCat] ? 'hidden' : ''}`;
+        header.id = `label-${currentCat}`;
+        header.innerText = currentCat === 'kähler' ? 'Kähler Manifolds' : 'Hyperkähler Manifolds';
+        listEl.appendChild(header);
+      }
+
+      const item = document.createElement('div');
+      item.className = `surface-item ${id === currentSurface ? 'active' : ''} ${s.category === 'hyperkähler' ? 'hk' : ''} ${!activeFilters[s.category] ? 'hidden' : ''}`;
+      item.id = `item-${id}`;
+      item.onclick = () => selectSurface(id);
+      item.innerHTML = `
+        <div class="surface-name">${s.label}</div>
+        <div class="surface-cat">${s.category}</div>
+      `;
+      listEl.appendChild(item);
     }
-  } catch(e) {
-    canvas.removeAttribute('src');
-    setTimeout(() => canvas.setAttribute('src', url), 10);
-  }
-  updateInfo(id);
-  updateSidebarActive(id);
-}
-
-function updateInfo(id) {
-  const s = SURFACES[id];
-  if (!s) return;
-  document.getElementById('infoEq').textContent   = s.eq;
-  document.getElementById('infoCurv').textContent = s.curv;
-  document.getElementById('infoHol').textContent  = s.hol;
-  document.getElementById('infoDesc').textContent = s.desc;
-  const cv = document.getElementById('infoCurv');
-  cv.className = 'info-val' + (s.curv.includes('Ric = 0') || s.curv === 'K = 0' ? ' ricci0' : s.category === 'hyperkähler' ? ' hk' : '');
-
-  // Parameter pane
-  if (s.param) {
-    document.getElementById('paramPane').classList.remove('hidden');
-    document.getElementById('noParam').classList.add('hidden');
-    document.getElementById('paramName').textContent = s.param;
-    if (s.paramNote) document.getElementById('paramNote').textContent = s.paramNote;
-  } else {
-    document.getElementById('paramPane').classList.add('hidden');
-    document.getElementById('noParam').classList.remove('hidden');
   }
 
-  // Update tab styling
-  const infoTab = document.getElementById('tab-info');
-  infoTab.classList.toggle('hk', s.category === 'hyperkähler');
-}
+  function selectSurface(id, loadScene = true) {
+    currentSurface = id;
+    document.querySelectorAll('.surface-item').forEach(el => el.classList.remove('active'));
+    const activeItem = document.getElementById(`item-${id}`);
+    if (activeItem) activeItem.classList.add('active');
 
-function updateSidebarActive(id) {
-  document.querySelectorAll('.surface-item').forEach(el => {
-    const isActive = el.dataset.id === id;
-    el.classList.toggle('active', isActive);
-    el.classList.toggle('hk', isActive && SURFACES[id].category === 'hyperkähler');
-  });
-}
+    const s = surfacesData[id];
+    if (s) {
+      document.getElementById('infoEq').innerText = s.equation;
+      document.getElementById('infoCurv').innerText = s.curvature;
+      document.getElementById('infoHol').innerText = s.holonomy;
+      document.getElementById('infoDesc').innerText = s.description;
 
-function switchTab(name) {
-  ['surfaces','info','param'].forEach(t => {
-    document.getElementById('tab-'  + t).classList.toggle('active', t === name);
-    document.getElementById('pane-' + t).classList.toggle('active', t === name);
-  });
-}
+      const isHK = s.category === 'hyperkähler';
+      ['infoEq', 'infoHol'].forEach(elId => {
+        const el = document.getElementById(elId);
+        if (isHK) el.classList.add('hk'); else el.classList.remove('hk');
+      });
 
-// ── Filter state ──────────────────────────────────────────────────────────────
-const filterState = { 'kähler': true, 'hyperkähler': true };
-
-function toggleFilter(cat) {
-  const bothOn = filterState['kähler'] && filterState['hyperkähler'];
-  if (bothOn) {
-    filterState['kähler']       = (cat === 'kähler');
-    filterState['hyperkähler']  = (cat === 'hyperkähler');
-  } else {
-    filterState['kähler']       = true;
-    filterState['hyperkähler']  = true;
-  }
-  document.getElementById('filterK') .classList.toggle('active', filterState['kähler']);
-  document.getElementById('filterHK').classList.toggle('active', filterState['hyperkähler']);
-  applyFilter();
-}
-
-function applyFilter() {
-  document.querySelectorAll('.surface-item').forEach(el => {
-    const cat = SURFACES[el.dataset.id]?.category;
-    el.classList.toggle('hidden', !filterState[cat]);
-  });
-  document.querySelectorAll('.section-label').forEach(el => {
-    const cat = el.dataset.cat;
-    if (cat) {
-      el.classList.toggle('hidden', !filterState[cat]);
+      // Configure parameter slider per surface
+      const paramPane = document.getElementById('tab-param');
+      if (['potential_family', 'taub_nut', 'eguchi_hanson'].includes(id)) {
+        paramPane.style.display = 'flex';
+        const slider = document.getElementById('paramSlider');
+        if (id === 'potential_family') {
+          slider.min = '-0.9'; slider.max = '3.0'; slider.step = '0.1'; slider.value = '1.0';
+          document.getElementById('paramLabel').innerText = 'Potential Parameter (t)';
+          document.getElementById('paramNote').innerText = 't=0: flat C, t>0: Fubini-Study variant, t<0: Poincaré disk variant.';
+        } else if (id === 'taub_nut') {
+          slider.min = '0.2'; slider.max = '4.0'; slider.step = '0.2'; slider.value = '1.0';
+          document.getElementById('paramLabel').innerText = 'NUT Charge (c)';
+          document.getElementById('paramNote').innerText = 'Controls the topological charge and metric warping of the U(1) fiber.';
+        } else if (id === 'eguchi_hanson') {
+          slider.min = '0.5'; slider.max = '2.5'; slider.step = '0.1'; slider.value = '1.0';
+          document.getElementById('paramLabel').innerText = 'Bolt Radius (a)';
+          document.getElementById('paramNote').innerText = 'Determines the size of the Eguchi-Hanson bolt where the fiber degenerates.';
+        }
+        currentParam = parseFloat(slider.value);
+        document.getElementById('paramVal').innerText = currentParam;
+      } else {
+        paramPane.style.display = 'none';
+        if (document.getElementById('pane-param').classList.contains('active')) {
+          switchTab('surfaces');
+        }
+      }
     }
-  });
-}
 
-// Build surface list
-const list = document.getElementById('surfaceList');
-let lastCat = null;
-Object.entries(SURFACES).forEach(([id, s]) => {
-  if (s.category !== lastCat) {
-    lastCat = s.category;
-    const lbl = document.createElement('div');
-    lbl.className = 'section-label';
-    lbl.dataset.cat = s.category;
-    lbl.textContent = s.category === 'kähler' ? 'Kähler' : 'Hyperkähler';
-    list.appendChild(lbl);
+    if (loadScene) {
+      loadCanvasScene(id, currentParam);
+    }
   }
-  const item = document.createElement('div');
-  item.className = 'surface-item';
-  item.dataset.id = id;
-  item.innerHTML = `<div class="surface-name">${s.label}</div>
-    <div class="surface-cat">${s.category} · ${s.hol}</div>`;
-  item.onclick = () => {
-    loadSurface(id, currentParam);
-  };
-  list.appendChild(item);
-});
 
-// Param slider
-const slider  = document.getElementById('paramSlider');
-const display = document.getElementById('paramDisplay');
-let debounce;
-slider.addEventListener('input', () => {
-  currentParam = parseFloat(slider.value);
-  display.textContent = currentParam.toFixed(2);
-  clearTimeout(debounce);
-  debounce = setTimeout(() => {
-    if (SURFACES[currentSurface].param) loadSurface(currentSurface, currentParam);
-  }, 150);
-});
+  function loadCanvasScene(id, param) {
+    const canvas = document.getElementById('canvas');
+    canvas.setAttribute('url', `/scene/${id}?param=${param}`);
+  }
 
-// Load default on ready
-window.addEventListener('load', () => {
-  setTimeout(() => loadSurface('fubini_study'), 300);
-});
+  function updateParam(val) {
+    currentParam = parseFloat(val);
+    document.getElementById('paramVal').innerText = currentParam;
+    loadCanvasScene(currentSurface, currentParam);
+  }
+
+  function toggleFilter(cat) {
+    activeFilters[cat] = !activeFilters[cat];
+    const tag = document.getElementById(cat === 'kähler' ? 'filterK' : 'filterHK');
+    if (activeFilters[cat]) tag.classList.add('active'); else tag.classList.remove('active');
+
+    for (const [id, s] of Object.entries(surfacesData)) {
+      if (s.category === cat) {
+        const item = document.getElementById(`item-${id}`);
+        if (item) {
+          if (activeFilters[cat]) item.classList.remove('hidden'); else item.classList.add('hidden');
+        }
+      }
+    }
+    const label = document.getElementById(`label-${cat}`);
+    if (label) {
+      if (activeFilters[cat]) label.classList.remove('hidden'); else label.classList.add('hidden');
+    }
+  }
+
+  function switchTab(tabName) {
+    document.querySelectorAll('.dtab').forEach(t => t.classList.remove('active', 'hk'));
+    document.querySelectorAll('.drawer-pane').forEach(p => p.classList.remove('active'));
+
+    const tab = document.getElementById(`tab-${tabName}`);
+    const pane = document.getElementById(`pane-${tabName}`);
+    
+    tab.classList.add('active');
+    if (currentSurface && surfacesData[currentSurface]?.category === 'hyperkähler' && tabName === 'surfaces') {
+      tab.classList.add('hk');
+    }
+    pane.classList.add('active');
+  }
+
+  window.onload = init;
 </script>
 </body>
-</html>"""
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+</html>
+"""
