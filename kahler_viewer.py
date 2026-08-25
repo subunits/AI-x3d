@@ -645,7 +645,7 @@ HTML = """<!DOCTYPE html>
       border-top: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      max-height: 48vh;
+      height: 44vh;          /* fixed height — no reflow on content change */
       padding-bottom: var(--sab);
     }
 
@@ -821,7 +821,6 @@ HTML = """<!DOCTYPE html>
       .viewport { flex: 1; }
       .drawer   {
         width: 300px;
-        max-height: none;
         height: 100%;
         border-top: none;
         border-left: 1px solid var(--border);
