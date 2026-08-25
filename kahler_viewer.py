@@ -628,8 +628,11 @@ HTML = """<!DOCTYPE html>
       background: #050609;
       min-height: 0;
       position: relative;
+      overflow: hidden;   /* contain X_ite's DOM mutations */
     }
     x3d-canvas {
+      position: absolute;
+      inset: 0;           /* top/right/bottom/left: 0 — fills viewport exactly */
       width: 100%;
       height: 100%;
       display: block;
