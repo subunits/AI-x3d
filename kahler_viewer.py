@@ -453,8 +453,8 @@ HTML = """<!DOCTYPE html>
   <header>
     <div class="logo">Kähler<span> / Hyperkähler</span></div>
     <div class="header-tags">
-      <span class="tag tag-k  active" id="filterK"  onclick="toggleFilter('kähler')">KÄHLER</span>
-      <span class="tag tag-hk active" id="filterHK" onclick="toggleFilter('hyperkähler')">HYPERKÄHLER</span>
+      <span class="tag tag-k  active" id="filterK"  data-cat="kahler">KÄHLER</span>
+      <span class="tag tag-hk active" id="filterHK" data-cat="hyperkahler">HYPERKÄHLER</span>
     </div>
   </header>
 
@@ -590,21 +590,37 @@ function switchTab(name) {
   });
 }
 
-const filterState = {'kähler':true,'hyperkähler':true};
-function toggleFilter(cat) {
-  const bothOn = filterState['kähler'] && filterState['hyperkähler'];
-  if (bothOn) { filterState['kähler']=(cat==='kähler'); filterState['hyperkähler']=(cat==='hyperkähler'); }
-  else        { filterState['kähler']=true; filterState['hyperkähler']=true; }
-  document.getElementById('filterK') .classList.toggle('active', filterState['kähler']);
-  document.getElementById('filterHK').classList.toggle('active', filterState['hyperkähler']);
+// Filter — use ascii keys to avoid encoding issues with ä
+const filterState = {'kahler':true,'hyperkahler':true};
+
+function catKey(category) {
+  return category === 'kähler' ? 'kahler' : 'hyperkahler';
+}
+
+function applyFilter() {
   document.querySelectorAll('.surface-item').forEach(el => {
-    const c = SURFACES[el.dataset.id]?.category;
-    el.style.visibility  = filterState[c] ? '' : 'hidden';
-    el.style.pointerEvents = filterState[c] ? '' : 'none';
+    const key = catKey(SURFACES[el.dataset.id]?.category);
+    el.style.visibility    = filterState[key] ? '' : 'hidden';
+    el.style.pointerEvents = filterState[key] ? '' : 'none';
   });
   document.querySelectorAll('.section-label').forEach(el => {
-    if (el.dataset.cat) el.style.visibility = filterState[el.dataset.cat] ? '' : 'hidden';
+    if (el.dataset.cat) {
+      const key = catKey(el.dataset.cat);
+      el.style.visibility = filterState[key] ? '' : 'hidden';
+    }
   });
+}
+
+document.getElementById('filterK') .addEventListener('click', () => toggleFilter('kahler'));
+document.getElementById('filterHK').addEventListener('click', () => toggleFilter('hyperkahler'));
+
+function toggleFilter(cat) {
+  const bothOn = filterState['kahler'] && filterState['hyperkahler'];
+  if (bothOn) { filterState['kahler']=(cat==='kahler'); filterState['hyperkahler']=(cat==='hyperkahler'); }
+  else        { filterState['kahler']=true; filterState['hyperkahler']=true; }
+  document.getElementById('filterK') .classList.toggle('active', filterState['kahler']);
+  document.getElementById('filterHK').classList.toggle('active', filterState['hyperkahler']);
+  applyFilter();
 }
 
 // Build surface list
