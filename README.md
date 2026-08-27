@@ -64,12 +64,12 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    P[Prompt] --> SD[Shape\ndetect]
-    P --> CD[Color\nparse]
-    P --> SZ[Size\nparse]
-    P --> PO[Position\nparse]
-    P --> CN[Count\nparse]
-    P --> AN[Animation\nparse]
+    P[Prompt] --> SD[Shape]
+    P --> CD[Color]
+    P --> SZ[Size]
+    P --> PO[Position]
+    P --> CN[Count]
+    P --> AN[Animation]
 
     SD --> ACT{Action}
     CD --> ACT
@@ -78,19 +78,19 @@ flowchart LR
     CN --> ACT
     AN --> ACT
 
-    ACT -->|add| BLD[Build\nshape XML]
-    ACT -->|lighting| LGT[Lighting\npreset]
-    ACT -->|camera| CAM[Viewpoint\nnode]
-    ACT -->|animate| ANM[TimeSensor\n+ ROUTE]
-    ACT -->|clear| CLR[Reset\nscene]
-    ACT -->|inspect| INS[Registry\nlist]
+    ACT -->|add| BLD[Build XML]
+    ACT -->|lighting| LGT[Lighting]
+    ACT -->|camera| CAM[Viewpoint]
+    ACT -->|animate| ANM[TimeSensor]
+    ACT -->|clear| CLR[Reset]
+    ACT -->|inspect| INS[Registry]
 
-    BLD --> VAL[Validate\nXML]
+    BLD --> VAL[Validate XML]
     LGT --> VAL
     CAM --> VAL
     ANM --> VAL
     VAL --> SCN[scene.x3d]
-    SCN --> X3D[X_ite\nrenderer]
+    SCN --> X3D[X_ite]
 ```
 
 ### Endpoints
@@ -111,31 +111,18 @@ flowchart LR
 18 solid geometry types — all with verified face windings, correct normals, and smooth shading:
 
 ```mermaid
-mindmap
-  root((Shapes))
-    Primitives
-      sphere
-      cone
-      cylinder
-      box
-      ellipsoid
-    Polyhedra
-      tetrahedron
-      octahedron
-      icosahedron
-      dodecahedron
-    Flat
-      plane
-      star
-      crescent
-    Volumetric
-      capsule
-      cross
-      arrow
-      torus
-    Swept
-      helix
-      torus knot
+flowchart LR
+    S((18 Shapes)) --> A[Primitives]
+    S --> B[Polyhedra]
+    S --> C[Flat]
+    S --> D[Volumetric]
+    S --> E[Swept]
+
+    A --> A1[sphere] & A2[cone] & A3[cylinder] & A4[box] & A5[ellipsoid]
+    B --> B1[tetrahedron] & B2[octahedron] & B3[icosahedron] & B4[dodecahedron]
+    C --> C1[plane] & C2[star] & C3[crescent]
+    D --> D1[capsule] & D2[cross] & D3[arrow] & D4[torus]
+    E --> E1[helix] & E2[torus knot]
 ```
 
 ### What you can say
