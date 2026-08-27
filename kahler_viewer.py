@@ -373,13 +373,9 @@ HTML = """<!DOCTYPE html>
     .dtab.active { color: var(--accent); border-bottom-color: var(--accent); }
     .dtab.active.hk { color: var(--accent2); border-bottom-color: var(--accent2); }
 
-    /* Pane stack: only active pane rendered, no layout impact */
-    .drawer-body { flex: 1; min-height: 0; overflow: hidden; position: relative; }
-    .drawer-pane {
-      display: none;
-      position: absolute; inset: 0;
-      flex-direction: column; overflow: hidden;
-    }
+    /* Pane stack: only the active pane is in the render tree */
+    .drawer-body { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .drawer-pane { display: none; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
     .drawer-pane.active { display: flex; }
 
     /* Surfaces pane */
@@ -439,19 +435,19 @@ HTML = """<!DOCTYPE html>
       min-width: 42px; text-align: right; }
     .param-note { font-size: 12px; color: var(--muted); line-height: 1.5; }
 
-    /* ── Landscape / iPad ── */
-    @media (min-width: 700px) and (orientation: landscape), (min-width: 900px) {
+    /* ── Landscape / iPad: only activate when truly wide ── */
+    @media (min-width: 1024px) and (orientation: landscape) {
       .shell  { flex-direction: row; flex-wrap: wrap; }
       header  { flex: 0 0 48px; width: 100%; order: -1; }
       .body   { flex-direction: row; flex: 1; min-height: 0; width: 100%; }
       .viewport { flex: 1; }
       .drawer {
-        flex: 0 0 300px; height: 100%;
+        flex: 0 0 320px; height: 100%;
         border-top: none; border-left: 1px solid var(--border);
         padding-bottom: 0; padding-right: var(--sar);
       }
     }
-    @media (min-width: 1024px) { .drawer { flex-basis: 340px; } }
+    @media (min-width: 1366px) { .drawer { flex-basis: 360px; } }
   </style>
 </head>
 <body>
