@@ -373,14 +373,14 @@ HTML = """<!DOCTYPE html>
     .dtab.active { color: var(--accent); border-bottom-color: var(--accent); }
     .dtab.active.hk { color: var(--accent2); border-bottom-color: var(--accent2); }
 
-    /* Pane stack: all panes sit in the same absolute space */
-    .drawer-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+    /* Pane stack: only active pane rendered, no layout impact */
+    .drawer-body { flex: 1; min-height: 0; overflow: hidden; position: relative; }
     .drawer-pane {
+      display: none;
       position: absolute; inset: 0;
-      display: flex; flex-direction: column; overflow: hidden;
-      visibility: hidden; pointer-events: none;
+      flex-direction: column; overflow: hidden;
     }
-    .drawer-pane.active { visibility: visible; pointer-events: auto; }
+    .drawer-pane.active { display: flex; }
 
     /* Surfaces pane */
     .surface-list {
