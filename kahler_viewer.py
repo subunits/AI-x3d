@@ -435,11 +435,9 @@ HTML = """<!DOCTYPE html>
       min-width: 42px; text-align: right; }
     .param-note { font-size: 12px; color: var(--muted); line-height: 1.5; }
 
-    /* ── Landscape / iPad: only activate when truly wide ── */
+    /* ── Landscape / iPad: header stays full-width, body goes row ── */
     @media (min-width: 1024px) and (orientation: landscape) {
-      .shell  { flex-direction: row; flex-wrap: wrap; }
-      header  { flex: 0 0 48px; width: 100%; order: -1; }
-      .body   { flex-direction: row; flex: 1; min-height: 0; width: 100%; }
+      .body   { flex-direction: row; }
       .viewport { flex: 1; }
       .drawer {
         flex: 0 0 320px; height: 100%;
