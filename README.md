@@ -251,17 +251,17 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    ROOT[Differential Geometry\nSurfaces] --> K[Kähler\nHolonomy ⊆ U&#40;n&#41;]
-    ROOT --> HK[Hyperkähler\nHolonomy ⊆ Sp&#40;n&#41;]
+    ROOT["Differential Geometry Surfaces"] --> K["Kähler — Holonomy ⊆ Un"]
+    ROOT --> HK["Hyperkähler — Holonomy ⊆ Spn"]
 
-    K --> FS["CP¹ Fubini-Study\nK = +1\nφ = log&#40;1+|z|²&#41;"]
-    K --> PD["Poincaré Disk H²\nK = −1\nφ = −log&#40;1−|z|²&#41;"]
-    K --> KF["Kähler Potential Family\nK&#40;z&#41; = t&#40;1+t|z|²&#41;⁻²\nparameter t ∈ &#40;0,3&#41;"]
+    K --> FS["CP¹ Fubini-Study<br/>K = +1<br/>φ = log(1+|z|²)"]
+    K --> PD["Poincaré Disk H²<br/>K = −1<br/>φ = −log(1−|z|²)"]
+    K --> KF["Kähler Potential Family<br/>K = t·(1+t|z|²)⁻²<br/>parameter t"]
 
-    HK --> TN["Taub-NUT\nRic = 0\nV&#40;r&#41; = 1 + c/r\nparameter c"]
-    HK --> EH["Eguchi-Hanson\nRic = 0  |Rm|²∝&#40;a/r&#41;⁸\nparameter a"]
-    HK --> CY["Calabi-Yau Quintic\nRic = 0  SU&#40;3&#41;\nΣzᵢ⁵ = 0 ⊂ CP⁴"]
-    HK --> FL["Flat ℝ⁴\nK = 0\nωI ωJ ωK"]
+    HK --> TN["Taub-NUT<br/>Ric = 0<br/>V = 1 + c/r<br/>parameter c"]
+    HK --> EH["Eguchi-Hanson<br/>Ric = 0<br/>|Rm|² ∝ a/r⁸<br/>parameter a"]
+    HK --> CY["Calabi-Yau Quintic<br/>Ric = 0  SU3<br/>Σzᵢ⁵ = 0 in CP⁴"]
+    HK --> FL["Flat R⁴<br/>K = 0<br/>ωI ωJ ωK"]
 
     style FS  fill:#1a2040,stroke:#4f6ef7,color:#a5b4fc
     style PD  fill:#0f2030,stroke:#38bdf8,color:#7dd3fc
