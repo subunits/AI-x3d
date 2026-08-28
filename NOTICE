@@ -1,0 +1,24 @@
+X3D Studio
+Copyright 2026 Michael Listrom
+
+This product includes software and standards developed by third parties:
+
+X_ite (X3D WebGL Engine)
+  License: MIT
+  https://github.com/create3000/x_ite
+
+FastAPI
+  License: MIT
+  https://github.com/tiangolo/fastapi
+
+Uvicorn
+  License: BSD 3-Clause
+  https://github.com/encode/uvicorn
+
+Pydantic
+  License: MIT
+  https://github.com/pydantic/pydantic
+
+X3D (Extensible 3D Graphics)
+  ISO/IEC 19775 Open Standard
+  https://www.web3d.org/x3d/what-x3d

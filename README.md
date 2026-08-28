@@ -1,5 +1,7 @@
 # X3D Studio
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 Two FastAPI apps for building and exploring 3D geometry in the browser, both rendered via [X_ite](https://create3000.github.io/x_ite/) (X3D WebGL engine). Run them side by side in a GitHub Codespace — each gets its own port and browser tab.
 
 | App | File | Port | What it does |
